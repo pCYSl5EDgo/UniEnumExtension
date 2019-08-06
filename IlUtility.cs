@@ -51,7 +51,7 @@ namespace UniEnumExtension
         public static ILProcessor Sub(this ILProcessor processor, sbyte value)
         {
             if (value == 0) return processor;
-            if (value < -1 && value >= -7)
+            if (value < 0 && value >= -7)
             {
                 return processor.Add(InstructionUtility.LoadConstant(-value)).Add();
             }
@@ -60,7 +60,7 @@ namespace UniEnumExtension
         public static ILProcessor Sub(this ILProcessor processor, int value)
         {
             if (value == 0) return processor;
-            if (value < -1 && value >= -7)
+            if (value < 0 && value >= -7)
             {
                 return processor.Add(InstructionUtility.LoadConstant(-value)).Add();
             }
@@ -69,7 +69,7 @@ namespace UniEnumExtension
         public static ILProcessor Sub(this ILProcessor processor, long value)
         {
             if (value == 0L) return processor;
-            if (value < -1L && value >= -7L)
+            if (value < 0L && value >= -7L)
             {
                 return processor.AddRange(InstructionUtility.LoadConstant(-value)).Add();
             }
@@ -159,6 +159,7 @@ namespace UniEnumExtension
         }
 
         public static ILProcessor Switch(this ILProcessor processor, Instruction[] instructions) => processor.Add(Instruction.Create(OpCodes.Switch, instructions));
+        public static ILProcessor Switch<T>(this ILProcessor processor, Instruction[] instructions) => processor.AddRange(InstructionUtility.Switch<T>(instructions));
         public static ILProcessor Br(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Br, instruction));
         public static ILProcessor BrS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Br_S, instruction));
         public static ILProcessor BrTrue(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Brtrue, instruction));
@@ -171,18 +172,26 @@ namespace UniEnumExtension
         public static ILProcessor BneS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bne_Un_S, instruction));
         public static ILProcessor Bge(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bge, instruction));
         public static ILProcessor BgeS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bge_S, instruction));
+        public static ILProcessor Bge<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.Bge<T>(instruction));
+        public static ILProcessor BgeS<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.BgeS<T>(instruction));
         public static ILProcessor BgeUn(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bge_Un, instruction));
         public static ILProcessor BgeUnS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bge_Un_S, instruction));
         public static ILProcessor Bgt(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bgt, instruction));
         public static ILProcessor BgtS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bgt_S, instruction));
+        public static ILProcessor Bgt<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.Bgt<T>(instruction));
+        public static ILProcessor BgtS<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.BgtS<T>(instruction));
         public static ILProcessor BgtUn(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bgt_Un, instruction));
         public static ILProcessor BgtUnS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bgt_Un_S, instruction));
         public static ILProcessor Ble(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Ble, instruction));
         public static ILProcessor BleS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Ble_S, instruction));
+        public static ILProcessor Ble<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.Ble<T>(instruction));
+        public static ILProcessor BleS<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.BleS<T>(instruction));
         public static ILProcessor BleUn(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Ble_Un, instruction));
         public static ILProcessor BleUnS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Ble_Un_S, instruction));
         public static ILProcessor Blt(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Blt, instruction));
         public static ILProcessor BltS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Blt_S, instruction));
+        public static ILProcessor Blt<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.Blt<T>(instruction));
+        public static ILProcessor BltS<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.BltS<T>(instruction));
         public static ILProcessor BltUn(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Blt_Un, instruction));
         public static ILProcessor BltUnS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Blt_Un_S, instruction));
 

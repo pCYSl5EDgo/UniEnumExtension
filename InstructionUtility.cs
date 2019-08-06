@@ -10,7 +10,7 @@ namespace UniEnumExtension
             switch (value)
             {
                 case byte v:
-                    return new[] { LoadConstant(v) };
+                    return new[] { LoadConstant((sbyte)v) };
                 case sbyte v:
                     return new[] { LoadConstant(v) };
                 case short v:
@@ -20,7 +20,7 @@ namespace UniEnumExtension
                 case int v:
                     return new[] { LoadConstant(v) };
                 case uint v:
-                    return LoadConstant(v);
+                    return new[] { LoadConstant((int)v) };
                 case long v:
                     return LoadConstant(v);
                 case ulong v:
@@ -167,6 +167,101 @@ namespace UniEnumExtension
                     break;
             }
             return answer;
+        }
+
+        public static Instruction Bge<T>(Instruction instruction)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return Instruction.Create(OpCodes.Bge, instruction);
+            if (typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                return Instruction.Create(OpCodes.Bge_Un, instruction);
+            throw new ArgumentException("type mismatch!");
+        }
+
+        public static Instruction BgeS<T>(Instruction instruction)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return Instruction.Create(OpCodes.Bge_S, instruction);
+            if (typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                return Instruction.Create(OpCodes.Bge_Un_S, instruction);
+            throw new ArgumentException("type mismatch!");
+        }
+        public static Instruction Bgt<T>(Instruction instruction)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return Instruction.Create(OpCodes.Bgt, instruction);
+            if (typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                return Instruction.Create(OpCodes.Bgt_Un, instruction);
+            throw new ArgumentException("type mismatch!");
+        }
+        public static Instruction BgtS<T>(Instruction instruction)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return Instruction.Create(OpCodes.Bgt_S, instruction);
+            if (typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                return Instruction.Create(OpCodes.Bgt_Un_S, instruction);
+            throw new ArgumentException("type mismatch!");
+        }
+        public static Instruction Ble<T>(Instruction instruction)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return Instruction.Create(OpCodes.Ble, instruction);
+            if (typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                return Instruction.Create(OpCodes.Ble_Un, instruction);
+            throw new ArgumentException("type mismatch!");
+        }
+        public static Instruction BleS<T>(Instruction instruction)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return Instruction.Create(OpCodes.Ble_S, instruction);
+            if (typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                return Instruction.Create(OpCodes.Ble_Un_S, instruction);
+            throw new ArgumentException("type mismatch!");
+        }
+        public static Instruction Blt<T>(Instruction instruction)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return Instruction.Create(OpCodes.Blt, instruction);
+            if (typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                return Instruction.Create(OpCodes.Blt_Un, instruction);
+            throw new ArgumentException("type mismatch!");
+        }
+
+        public static Instruction BltS<T>(Instruction instruction)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(long))
+                return Instruction.Create(OpCodes.Blt_S, instruction);
+            if (typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                return Instruction.Create(OpCodes.Blt_Un_S, instruction);
+            throw new ArgumentException("type mismatch!");
+        }
+
+        public static Instruction[] Switch<T>(Instruction[] instructions)
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint))
+                return new[] { Instruction.Create(OpCodes.Switch, instructions) };
+            if (typeof(T) == typeof(long))
+                return new[]
+                {
+                    Instruction.Create(OpCodes.Conv_I4),
+                    Instruction.Create(OpCodes.Switch, instructions),
+                };
+            if (typeof(T) == typeof(ulong))
+                return new[]
+                {
+                    Instruction.Create(OpCodes.Conv_U4),
+                    Instruction.Create(OpCodes.Switch, instructions),
+                };
+            throw new ArgumentException("type mismatch!");
+        }
+
+        public static int SwitchCount<T>()
+        {
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(int) || typeof(T) == typeof(byte) || typeof(T) == typeof(ushort) || typeof(T) == typeof(uint))
+                return 1;
+            if (typeof(T) == typeof(long) || typeof(T) == typeof(ulong))
+                return 2;
+            throw new ArgumentException("type mismatch!");
         }
     }
 }

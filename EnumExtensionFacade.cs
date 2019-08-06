@@ -48,7 +48,14 @@ namespace UniEnumExtension
         private static void InitializeFields()
         {
             InitializeDictionary();
-            processorInt32 = new EnumExtensionProcessorInt32(typeToStringDictionary);
+            processorSByte = new EnumExtensionProcessorGeneric<sbyte>(typeToStringDictionary);
+            processorInt16 = new EnumExtensionProcessorGeneric<short>(typeToStringDictionary);
+            processorInt32 = new EnumExtensionProcessorGeneric<int>(typeToStringDictionary);
+            processorInt64 = new EnumExtensionProcessorGeneric<long>(typeToStringDictionary);
+            processorByte = new EnumExtensionProcessorGeneric<byte>(typeToStringDictionary);
+            processorUInt16 = new EnumExtensionProcessorGeneric<ushort>(typeToStringDictionary);
+            processorUInt32 = new EnumExtensionProcessorGeneric<uint>(typeToStringDictionary);
+            processorUInt64 = new EnumExtensionProcessorGeneric<ulong>(typeToStringDictionary);
             processorInt32Flags = new EnumExtensionProcessorInt32Flags(typeToStringDictionary);
         }
 

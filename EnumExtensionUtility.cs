@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
@@ -22,13 +21,13 @@ namespace UniEnumExtension
                     minValue = maxValue = default;
                     return dictionary;
                 }
-                var fieldDefinition = enumerator.Current;
+                var fieldDefinition = enumerator.Current ?? throw new NullReferenceException();
                 min = max = fieldDefinition;
                 var current = (T)fieldDefinition.Constant;
                 dictionary[current] = fieldDefinition;
                 while (enumerator.MoveNext())
                 {
-                    fieldDefinition = enumerator.Current;
+                    fieldDefinition = enumerator.Current ?? throw new NullReferenceException();
                     current = (T)fieldDefinition.Constant;
                     if (current.CompareTo((T)min.Constant) < 0)
                         min = fieldDefinition;
@@ -48,7 +47,7 @@ namespace UniEnumExtension
         public static void ProcessCount0(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition)
         {
             methodToString.Body.GetILProcessor()
-            .LdArg(0)
+                .LdArg(0)
                 .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
                 .Ret();
@@ -118,7 +117,8 @@ namespace UniEnumExtension
                 .Ret();
         }
 
-        public static void ProcessCountGreaterThan2<T>(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodDefinition baseToStringMethodDefinition, (string name, T value)[] sortedArray) where T : unmanaged, IComparable<T>
+        public static void ProcessCountGreaterThan2<T>(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodDefinition baseToStringMethodDefinition, (string name, T value)[] sortedArray)
+            where T : unmanaged, IComparable<T>, IEquatable<T>
         {
             var processor = method.Body.GetILProcessor();
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
@@ -130,12 +130,42 @@ namespace UniEnumExtension
             }
             else
             {
-                elseRoutineFirst = ProcessDiscontinuous(method, valueFieldDefinition, sortedArray, ref minValue, processor);
+                ref var maxValue = ref sortedArray[sortedArray.LongLength - 1].value;
+                if (NumberHelper.IsDifferenceLessThanOrEqualsTo(minValue, maxValue, sortedArray.LongLength << 1, out var actualCount))
+                {
+                    MakeSortedArray(sortedArray, actualCount, processor, elseRoutineFirst);
+                }
+                else
+                {
+                    elseRoutineFirst = ProcessDiscontinuous(method, valueFieldDefinition, sortedArray, ref minValue, processor);
+                }
             }
             processor
                 .Add(elseRoutineFirst)
                 .Call(valueFieldDefinition.Module.ImportReference(baseToStringMethodDefinition))
                 .Ret();
+        }
+
+        private static void MakeSortedArray<T>((string name, T value)[] sortedArray, long actualCount, ILProcessor processor, Instruction elseRoutineFirst)
+            where T : unmanaged, IComparable<T>, IEquatable<T>
+        {
+            var destinations = new Instruction[actualCount];
+            var value = sortedArray[0].value;
+            processor.Sub(value).Switch<T>(destinations).Br(elseRoutineFirst);
+            for (long i = 0, j = 0; i < destinations.LongLength; i++, value = NumberHelper.Increment(value))
+            {
+                ref var current = ref sortedArray[j];
+                if (current.value.Equals(value))
+                {
+                    j++;
+                    destinations[i] = Instruction.Create(OpCodes.Ldstr, current.name);
+                }
+                else
+                {
+                    destinations[i] = Instruction.Create(OpCodes.Ldstr, value.ToString());
+                }
+                processor.Add(destinations[i]).Ret();
+            }
         }
 
         private static Instruction ProcessDiscontinuous<T>(MethodDefinition method, FieldDefinition valueFieldDefinition, (string name, T value)[] sortedArray, ref T minValue, ILProcessor processor)
@@ -145,35 +175,119 @@ namespace UniEnumExtension
             method.Body.Variables.Add(variableDefinition);
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldloca_S, variableDefinition);
 
-            if (NumberHelper.Sub(minValue, sortedArray[sortedArray.LongLength - 1L].value, out var difference))
+            processor
+                .Dup()
+                .StLoc(0)
+                .LdC(minValue)
+                .Blt<T>(elseRoutineFirst)
+                .LdLoc(0)
+                .LdC(sortedArray[sortedArray.LongLength - 1L].value)
+                .Bgt<T>(elseRoutineFirst);
+
+            var groups = DivideIntoContinuousGroup(sortedArray).ToArray();
+
+            if (groups.Length == sortedArray.Length)
             {
-                processor
-                    .LdArg(0)
-                    .LdFld(valueFieldDefinition)
-                    .Sub(minValue)
-                    .Dup()
-                    .StLoc(0)
-                    .LdC(default(T))
-                    .Blt(elseRoutineFirst)
-                    .LdLoc(0)
-                    .LdC(difference)
-                    .Bgt(elseRoutineFirst);
-
-                for (var i = 1; i < sortedArray.Length; i++)
-                {
-                    ref var item = ref sortedArray[i];
-                    NumberHelper.Sub(minValue, item.value, out item.value);
-                }
-                minValue = default;
-
                 processor.AddRange(BinarySearch(sortedArray, elseRoutineFirst));
             }
             else
             {
-                throw new ArgumentException("too much items!");
+                processor.LdLoc(0).AddRange(BinarySearchGroup(sortedArray, groups, 0, groups.Length - 1, elseRoutineFirst));
             }
             return elseRoutineFirst;
         }
+
+        private static IEnumerable<Instruction> BinarySearchGroup<T>((string name, T value)[] sortedArray, ArraySegment<(string name, T value)>[] groups, int minIncluded, int maxIncluded, Instruction elseRoutineFirstInstruction)
+            where T : unmanaged, IComparable<T>
+        {
+            if (maxIncluded == minIncluded)
+            {
+                return OneGroup(sortedArray, ref groups[minIncluded], elseRoutineFirstInstruction);
+            }
+            var index = (maxIncluded + minIncluded) >> 1;
+            ref var group = ref groups[index];
+            var bigger = Instruction.Create(OpCodes.Ldloc_0);
+            return InstructionUtility.LoadConstantGeneric(group.GetLast().value)
+                .Concat(new[]
+                {
+
+                    InstructionUtility.Bgt<T>(bigger),
+                    Instruction.Create(OpCodes.Ldloc_0),
+                })
+                .Concat(BinarySearchGroup(sortedArray, groups, minIncluded, index, elseRoutineFirstInstruction))
+                .Append(bigger)
+                .Concat(BinarySearchGroup(sortedArray, groups, index + 1, maxIncluded, elseRoutineFirstInstruction));
+        }
+
+        private static IEnumerable<Instruction> OneGroup<T>((string name, T value)[] sortedArray, ref ArraySegment<(string name, T value)> group, Instruction elseRoutineFirstInstruction)
+            where T : unmanaged, IComparable<T>
+        {
+            var groupOffset = group.Offset;
+            ref var first = ref sortedArray[groupOffset];
+            switch (group.Count)
+            {
+                case 1:
+                    return InstructionUtility.LoadConstantGeneric(first.value)
+                        .Concat(new[]
+                        {
+                            Instruction.Create(OpCodes.Bne_Un, elseRoutineFirstInstruction),
+                            Instruction.Create(OpCodes.Ldstr, first.name),
+                            Instruction.Create(OpCodes.Ret),
+                        });
+                case 2:
+                    ref var second = ref sortedArray[groupOffset + 1];
+                    var next0 = Instruction.Create(OpCodes.Ldloc_0);
+                    return InstructionUtility.LoadConstantGeneric(first.value)
+                        .Concat(new[]
+                        {
+                            Instruction.Create(OpCodes.Bne_Un, next0),
+                            Instruction.Create(OpCodes.Ldstr, first.name),
+                            Instruction.Create(OpCodes.Ret),
+                            next0,
+                        })
+                        .Concat(InstructionUtility.LoadConstantGeneric(second.value))
+                        .Concat(new[]
+                        {
+                            Instruction.Create(OpCodes.Bne_Un, elseRoutineFirstInstruction),
+                            Instruction.Create(OpCodes.Ldstr, second.name),
+                            Instruction.Create(OpCodes.Ret),
+                        });
+                default:
+                    var groupCount = group.Count;
+                    var destinations = new Instruction[groupCount];
+                    Instruction[] instructions;
+                    if (InstructionUtility.SwitchCount<T>() == 1)
+                    {
+                        instructions = new Instruction[3 + destinations.Length * 2];
+                        instructions[0] = Instruction.Create(OpCodes.Sub);
+                        instructions[1] = Instruction.Create(OpCodes.Switch, destinations);
+                        instructions[2] = Instruction.Create(OpCodes.Br, elseRoutineFirstInstruction);
+                        for (var i = 0; i < groupCount; i++)
+                        {
+                            instructions[i * 2 + 3] = destinations[i] = Instruction.Create(OpCodes.Ldstr, sortedArray[groupOffset + i].name);
+                            instructions[i * 2 + 4] = Instruction.Create(OpCodes.Ret);
+                        }
+                    }
+                    else
+                    {
+                        instructions = new Instruction[4 + destinations.Length * 2];
+                        instructions[0] = Instruction.Create(OpCodes.Sub);
+                        instructions[1] = Instruction.Create(typeof(T) == typeof(ulong) ? OpCodes.Conv_U4 : OpCodes.Conv_I4);
+                        instructions[2] = Instruction.Create(OpCodes.Switch, destinations);
+                        instructions[3] = Instruction.Create(OpCodes.Br, elseRoutineFirstInstruction);
+                        for (var i = 0; i < groupCount; i++)
+                        {
+                            instructions[i * 2 + 4] = destinations[i] = Instruction.Create(OpCodes.Ldstr, sortedArray[groupOffset + i].name);
+                            instructions[i * 2 + 5] = Instruction.Create(OpCodes.Ret);
+                        }
+                    }
+                    return InstructionUtility.LoadConstantGeneric(first.value)
+                        .Concat(instructions);
+            }
+        }
+
+        // ReSharper disable once PossibleNullReferenceException
+        private static ref (string name, T value) GetLast<T>(this ref ArraySegment<(string name, T value)> segment) => ref segment.Array[segment.Offset + segment.Count - 1];
 
         private static void ProcessContinuous<T>((string name, T value)[] sortedArray, ILProcessor processor, T minValue, Instruction elseRoutineFirst)
             where T : unmanaged, IComparable<T>
@@ -181,7 +295,7 @@ namespace UniEnumExtension
             var destinations = new Instruction[sortedArray.Length];
             processor
                 .Sub(minValue)
-                .Switch(destinations)
+                .Switch<T>(destinations)
                 .Br(elseRoutineFirst);
             for (var i = 0; i < destinations.Length; i++)
             {
@@ -221,12 +335,8 @@ namespace UniEnumExtension
             var index = sortedArray.LongLength >> 1;
             var neq = Instruction.Create(OpCodes.Ldloc_0);
             var blt = Instruction.Create(OpCodes.Ldloc_0);
-            var constantArray = InstructionUtility.LoadConstantGeneric(sortedArray[index].value);
-            return new[]
-                {
-                    Instruction.Create(OpCodes.Ldloc_0),
-                }
-                .Concat(constantArray)
+            return InstructionUtility.LoadConstantGeneric(sortedArray[index].value)
+                .Prepend(Instruction.Create(OpCodes.Ldloc_0))
                 .Concat(new[]
                 {
                     Instruction.Create(OpCodes.Bne_Un_S, neq),
@@ -234,10 +344,10 @@ namespace UniEnumExtension
                     Instruction.Create(OpCodes.Ret),
                     neq,
                 })
-                .Concat(constantArray)
+                .Concat(InstructionUtility.LoadConstantGeneric(sortedArray[index].value))
                 .Concat(new[]
                 {
-                    Instruction.Create(OpCodes.Blt, blt),
+                    InstructionUtility.Blt<T>(blt),
                     Instruction.Create(OpCodes.Ldloc_0),
                 })
                 .Concat(BinarySearch(sortedArray, index + 1L, sortedArray.LongLength - 1L, elseRoutineFirstInstruction))
@@ -248,10 +358,9 @@ namespace UniEnumExtension
         private static IEnumerable<Instruction> BinarySearch<T>((string name, T value)[] sortedArray, long minIncluded, long maxIncluded, Instruction elseRoutineFirstInstruction)
             where T : unmanaged, IComparable<T>
         {
-            var minLoadConstantGeneric = InstructionUtility.LoadConstantGeneric(sortedArray[minIncluded].value);
             if (minIncluded == maxIncluded)
             {
-                return minLoadConstantGeneric.Concat(new[]
+                return InstructionUtility.LoadConstantGeneric(sortedArray[minIncluded].value).Concat(new[]
                 {
                     Instruction.Create(OpCodes.Bne_Un, elseRoutineFirstInstruction),
                     Instruction.Create(OpCodes.Ldstr, sortedArray[minIncluded].name),
@@ -259,22 +368,22 @@ namespace UniEnumExtension
                 });
             }
             var neq = Instruction.Create(OpCodes.Ldloc_0);
-            var maxLoadConstantGeneric = InstructionUtility.LoadConstantGeneric(sortedArray[maxIncluded].value);
             if (maxIncluded - minIncluded == 1)
             {
-                return minLoadConstantGeneric.Concat(new[]
-                {
-                    Instruction.Create(OpCodes.Bne_Un, neq),
-                    Instruction.Create(OpCodes.Ldstr, sortedArray[minIncluded].name),
-                    Instruction.Create(OpCodes.Ret),
-                    neq,
-                })
-                    .Concat(minLoadConstantGeneric)
+                return InstructionUtility.LoadConstantGeneric(sortedArray[minIncluded].value)
+                    .Concat(new[]
+                    {
+                        Instruction.Create(OpCodes.Bne_Un, neq),
+                        Instruction.Create(OpCodes.Ldstr, sortedArray[minIncluded].name),
+                        Instruction.Create(OpCodes.Ret),
+                        neq,
+                    })
+                    .Concat(InstructionUtility.LoadConstantGeneric(sortedArray[minIncluded].value))
                     .Concat(new[] {
-                        Instruction.Create(OpCodes.Blt, elseRoutineFirstInstruction),
+                        InstructionUtility.Blt<T>(elseRoutineFirstInstruction),
                         Instruction.Create(OpCodes.Ldloc_0),
                     })
-                    .Concat(maxLoadConstantGeneric)
+                    .Concat(InstructionUtility.LoadConstantGeneric(sortedArray[maxIncluded].value))
                     .Concat(new[] {
                         Instruction.Create(OpCodes.Bne_Un, elseRoutineFirstInstruction),
                         Instruction.Create(OpCodes.Ldstr, sortedArray[maxIncluded].name),
@@ -283,17 +392,17 @@ namespace UniEnumExtension
             }
             var index = (minIncluded + maxIncluded) >> 1;
             var blt = Instruction.Create(OpCodes.Ldloc_0);
-            var indexLoadConstantGeneric = InstructionUtility.LoadConstantGeneric(sortedArray[index].value);
-            return indexLoadConstantGeneric.Concat(new[]
+            return InstructionUtility.LoadConstantGeneric(sortedArray[index].value)
+                .Concat(new[]
                 {
                     Instruction.Create(OpCodes.Bne_Un, neq),
                     Instruction.Create(OpCodes.Ldstr, sortedArray[index].name),
                     Instruction.Create(OpCodes.Ret),
                     neq,
                     })
-                .Concat(indexLoadConstantGeneric)
+                .Concat(InstructionUtility.LoadConstantGeneric(sortedArray[index].value))
                 .Concat(new[] {
-                    Instruction.Create(OpCodes.Blt, blt),
+                    InstructionUtility.Blt<T>(blt),
                     Instruction.Create(OpCodes.Ldloc_0),
                 })
                 .Concat(BinarySearch(sortedArray, index + 1, maxIncluded, elseRoutineFirstInstruction))

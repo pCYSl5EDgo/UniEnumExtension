@@ -30,6 +30,61 @@ namespace UniEnumExtension
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);
         }
 
+        public static bool IsDifferenceLessThanOrEqualsTo<T>(T min, T max, long value, out long actualCount)
+        {
+            switch (min)
+            {
+                case byte v0:
+                    if (!(max is byte v1)) goto default;
+                    return (actualCount = v1 - v0 + 1) <= value;
+                case sbyte v0:
+                    if (!(max is sbyte v2)) goto default;
+                    return (actualCount = v2 - v0 + 1) <= value;
+                case short v0:
+                    if (!(max is short v3)) goto default;
+                    return (actualCount = v3 - v0 + 1) <= value;
+                case ushort v0:
+                    if (!(max is ushort v4)) goto default;
+                    return (actualCount = v4 - v0 + 1) <= value;
+                case int v0:
+                    if (!(max is int v5)) goto default;
+                    return (actualCount = v5 - v0 + 1) <= value;
+                case uint v0:
+                    if (!(max is uint v6)) goto default;
+                    return (actualCount = v6 - v0 + 1) <= value;
+                case long v0:
+                    if (!(max is long v7)) goto default;
+                    try
+                    {
+                        checked
+                        {
+                            return (actualCount = v7 - v0 + 1) <= value;
+                        }
+                    }
+                    catch
+                    {
+                        actualCount = 0;
+                        return false;
+                    }
+                case ulong v0:
+                    if (!(max is ulong v8)) goto default;
+                    try
+                    {
+                        checked
+                        {
+                            return (actualCount = (long)(v8 - v0 + 1)) <= value;
+                        }
+                    }
+                    catch
+                    {
+                        actualCount = 0;
+                        return false;
+                    }
+                default:
+                    throw new ArgumentException("Type mismatch!" + typeof(T).Name);
+            }
+        }
+
         public static bool IsDifferenceOne<T>(T min, T max)
             where T : unmanaged
         {
