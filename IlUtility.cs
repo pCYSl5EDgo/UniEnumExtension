@@ -5,7 +5,7 @@ using Mono.Cecil.Cil;
 
 namespace UniEnumExtension
 {
-    public static class IlUtility
+    public static unsafe class IlUtility
     {
         public static ILProcessor Add(this ILProcessor processor, Instruction instruction)
         {
@@ -25,27 +25,25 @@ namespace UniEnumExtension
         public static ILProcessor Add(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Add));
         public static ILProcessor Sub(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Sub));
 
-        public static ILProcessor Sub<T>(this ILProcessor processor, T value) where T : unmanaged, IComparable<T>
+        public static ILProcessor Sub<T>(this ILProcessor processor, T value)
+            where T : unmanaged, IComparable<T>
         {
-            switch (value)
-            {
-                case byte v:
-                    return processor.Sub((int)v);
-                case sbyte v:
-                    return processor.Sub(v);
-                case short v:
-                    return processor.Sub((int)v);
-                case ushort v:
-                    return processor.Sub((int)v);
-                case int v:
-                    return processor.Sub(v);
-                case uint v:
-                    return processor.Sub((long)v);
-                case long v:
-                    return processor.Sub(v);
-                case ulong v:
-                    return processor.Sub((long)v);
-            }
+            if (typeof(T) == typeof(byte))
+                return processor.Sub((int)*(byte*)&value);
+            if (typeof(T) == typeof(sbyte))
+                return processor.Sub(*(sbyte*)&value);
+            if (typeof(T) == typeof(short))
+                return processor.Sub((int)*(short*)&value);
+            if (typeof(T) == typeof(ushort))
+                return processor.Sub((int)*(ushort*)&value);
+            if (typeof(T) == typeof(int))
+                return processor.Sub(*(int*)&value);
+            if (typeof(T) == typeof(uint))
+                return processor.Sub((int)*(uint*)&value);
+            if (typeof(T) == typeof(long))
+                return processor.Sub(*(long*)&value);
+            if (typeof(T) == typeof(ulong))
+                return processor.Sub((long)*(ulong*)&value);
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);
         }
         public static ILProcessor Sub(this ILProcessor processor, sbyte value)
@@ -76,30 +74,29 @@ namespace UniEnumExtension
             return processor.AddRange(InstructionUtility.LoadConstant(value)).Sub();
         }
 
+        public static ILProcessor Ceq(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Ceq));
+
         public static ILProcessor Dup(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Dup));
         public static ILProcessor Pop(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Pop));
 
         public static ILProcessor LdC<T>(this ILProcessor processor, T value) where T : unmanaged
         {
-            switch (value)
-            {
-                case byte v:
-                    return processor.Add(InstructionUtility.LoadConstant((sbyte)v));
-                case sbyte v:
-                    return processor.Add(InstructionUtility.LoadConstant(v));
-                case short v:
-                    return processor.Add(InstructionUtility.LoadConstant(v));
-                case ushort v:
-                    return processor.Add(InstructionUtility.LoadConstant(v));
-                case int v:
-                    return processor.Add(InstructionUtility.LoadConstant(v));
-                case uint v:
-                    return processor.Add(InstructionUtility.LoadConstant((int)v));
-                case long v:
-                    return processor.AddRange(InstructionUtility.LoadConstant(v));
-                case ulong v:
-                    return processor.AddRange(InstructionUtility.LoadConstant((long)v));
-            }
+            if (typeof(T) == typeof(byte))
+                return processor.Add(InstructionUtility.LoadConstant((sbyte)*(byte*)&value));
+            if (typeof(T) == typeof(sbyte))
+                return processor.Add(InstructionUtility.LoadConstant(*(sbyte*)&value));
+            if (typeof(T) == typeof(short))
+                return processor.Add(InstructionUtility.LoadConstant(*(short*)&value));
+            if (typeof(T) == typeof(ushort))
+                return processor.Add(InstructionUtility.LoadConstant(*(ushort*)&value));
+            if (typeof(T) == typeof(int))
+                return processor.Add(InstructionUtility.LoadConstant(*(int*)&value));
+            if (typeof(T) == typeof(uint))
+                return processor.Add(InstructionUtility.LoadConstant(*(int*)&value));
+            if (typeof(T) == typeof(long))
+                return processor.AddRange(InstructionUtility.LoadConstant(*(long*)&value));
+            if (typeof(T) == typeof(ulong))
+                return processor.AddRange(InstructionUtility.LoadConstant(*(long*)&value));
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);
         }
 

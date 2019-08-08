@@ -8,28 +8,35 @@ namespace UniEnumExtension
     public sealed class Program : EditorWindow
     {
         [MenuItem("Window/UniEnumExtension")]
-        public static void Open() => GetWindow<Program>(typeof(SceneView));
+        public static void Open() => GetWindow<Program>();
 
         private SerializedObject serializedObject;
         private SerializedProperty enablesProperty;
+        private SerializedProperty shouldProcessAllProperty;
         ProgramStatus programStatus;
 
         public void OnEnable()
         {
-            if (serializedObject != null) return;
-
             var guidArray = AssetDatabase.FindAssets("t:" + nameof(ProgramStatus));
-            programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
+            if (programStatus == null)
+            {
+                programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
+            }
+            programStatus.Initialize();
             serializedObject = new SerializedObject(programStatus);
             enablesProperty = serializedObject.FindProperty(nameof(ProgramStatus.Enables));
+            shouldProcessAllProperty = serializedObject.FindProperty(nameof(programStatus.ShouldProcessAllAssemblies));
         }
 
         [InitializeOnLoadMethod]
         private static void PostCompiled()
         {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) { return; }
+
             var guidArray = AssetDatabase.FindAssets("t:" + nameof(ProgramStatus));
             var programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
-            EnumExtender.Main(programStatus.OutputPaths.Where((_, index) => programStatus.Enables[index]));
+            var assemblyPaths = programStatus.OutputPaths.Where((_, index) => programStatus.Enables[index]);
+            EnumExtender.Execute(assemblyPaths);
         }
 
         // ReSharper disable once InconsistentNaming
@@ -38,42 +45,54 @@ namespace UniEnumExtension
             bool changed = false;
             EditorGUILayout.Space();
             EditorGUILayout.Space();
-            if (GUILayout.Button("Update Assemblies"))
-            {
-                programStatus.Initialize();
-                serializedObject = new SerializedObject(programStatus);
-                enablesProperty = serializedObject.FindProperty(nameof(ProgramStatus.Enables));
-            }
             serializedObject.Update();
             EditorGUILayout.Space();
-            using (new EditorGUILayout.HorizontalScope())
+            var shouldProcess = shouldProcessAllProperty.boolValue;
+            var newShould = EditorGUILayout.ToggleLeft("Process All Assemblies", shouldProcess, "button");
+            if (newShould ^ shouldProcess)
             {
-                if (GUILayout.Button("Select All"))
+                shouldProcessAllProperty.boolValue = newShould;
+                if (newShould)
                 {
-                    changed = true;
                     for (var i = 0; i < programStatus.Enables.Length; i++)
                     {
                         enablesProperty.GetArrayElementAtIndex(i).boolValue = true;
                     }
                 }
-                if (GUILayout.Button("Deselect All"))
+                changed = true;
+            }
+            if (!newShould)
+            {
+                EditorGUILayout.Space();
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    changed = true;
-                    for (var i = 0; i < programStatus.Enables.Length; i++)
+                    if (GUILayout.Button("Select All"))
                     {
-                        enablesProperty.GetArrayElementAtIndex(i).boolValue = false;
+                        changed = true;
+                        for (var i = 0; i < programStatus.Enables.Length; i++)
+                        {
+                            enablesProperty.GetArrayElementAtIndex(i).boolValue = true;
+                        }
+                    }
+                    if (GUILayout.Button("Deselect All"))
+                    {
+                        changed = true;
+                        for (var i = 0; i < programStatus.Enables.Length; i++)
+                        {
+                            enablesProperty.GetArrayElementAtIndex(i).boolValue = false;
+                        }
                     }
                 }
-            }
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Target Assemblies", EditorStyles.boldLabel);
-            for (var i = 0; i < programStatus.Enables.Length; i++)
-            {
-                ref var programStatusEnable = ref programStatus.Enables[i];
-                var enabled = EditorGUILayout.ToggleLeft(new GUIContent(programStatus.Names[i], programStatus.OutputPaths[i]), programStatusEnable, "button");
-                if (!(enabled ^ programStatusEnable)) continue;
-                enablesProperty.GetArrayElementAtIndex(i).boolValue = enabled;
-                changed = true;
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Target Assemblies", EditorStyles.boldLabel);
+                for (var i = 0; i < programStatus.Enables.Length; i++)
+                {
+                    ref var programStatusEnable = ref programStatus.Enables[i];
+                    var enabled = EditorGUILayout.ToggleLeft(new GUIContent(programStatus.Names[i], programStatus.OutputPaths[i]), programStatusEnable, "button");
+                    if (!(enabled ^ programStatusEnable)) continue;
+                    enablesProperty.GetArrayElementAtIndex(i).boolValue = enabled;
+                    changed = true;
+                }
             }
             if (changed)
             {

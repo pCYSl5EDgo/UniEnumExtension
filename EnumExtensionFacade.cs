@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Assets.UniEnumExtension;
 using Mono.Cecil;
 using UnityEditor;
 
@@ -9,29 +8,28 @@ namespace UniEnumExtension
 {
     internal static class EnumExtender
     {
-        private static Dictionary<string, MethodDefinition> typeToStringDictionary;
-        private static IEnumExtensionProcessor<int> processorInt32;
-        private static IEnumExtensionProcessor<int> processorInt32Flags;
-        private static IEnumExtensionProcessor<uint> processorUInt32;
-        private static IEnumExtensionProcessor<uint> processorUInt32Flags;
-        private static IEnumExtensionProcessor<long> processorInt64;
-        private static IEnumExtensionProcessor<long> processorInt64Flags;
-        private static IEnumExtensionProcessor<ulong> processorUInt64;
-        private static IEnumExtensionProcessor<ulong> processorUInt64Flags;
-        private static IEnumExtensionProcessor<short> processorInt16;
-        private static IEnumExtensionProcessor<short> processorInt16Flags;
-        private static IEnumExtensionProcessor<ushort> processorUInt16;
-        private static IEnumExtensionProcessor<ushort> processorUInt16Flags;
-        private static IEnumExtensionProcessor<byte> processorByte;
-        private static IEnumExtensionProcessor<byte> processorByteFlags;
-        private static IEnumExtensionProcessor<sbyte> processorSByte;
-        private static IEnumExtensionProcessor<sbyte> processorSByteFlags;
+        private static Dictionary<string, MethodDefinition> _typeToStringDictionary;
+        private static IEnumExtensionProcessor<int> _processorInt32;
+        private static IEnumExtensionProcessor<int> _processorInt32Flags;
+        private static IEnumExtensionProcessor<uint> _processorUInt32;
+        private static IEnumExtensionProcessor<uint> _processorUInt32Flags;
+        private static IEnumExtensionProcessor<long> _processorInt64;
+        private static IEnumExtensionProcessor<long> _processorInt64Flags;
+        private static IEnumExtensionProcessor<ulong> _processorUInt64;
+        private static IEnumExtensionProcessor<ulong> _processorUInt64Flags;
+        private static IEnumExtensionProcessor<short> _processorInt16;
+        private static IEnumExtensionProcessor<short> _processorInt16Flags;
+        private static IEnumExtensionProcessor<ushort> _processorUInt16;
+        private static IEnumExtensionProcessor<ushort> _processorUInt16Flags;
+        private static IEnumExtensionProcessor<byte> _processorByte;
+        private static IEnumExtensionProcessor<byte> _processorByteFlags;
+        private static IEnumExtensionProcessor<sbyte> _processorSByte;
+        private static IEnumExtensionProcessor<sbyte> _processorSByteFlags;
 
-        public static void Main(IEnumerable<string> assemblyPaths)
+        public static void Execute(IEnumerable<string> assemblyPaths)
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) { return; }
-            EditorApplication.LockReloadAssemblies();
             InitializeFields();
+            EditorApplication.LockReloadAssemblies();
             try
             {
                 foreach (var assemblyPath in assemblyPaths)
@@ -48,15 +46,22 @@ namespace UniEnumExtension
         private static void InitializeFields()
         {
             InitializeDictionary();
-            processorSByte = new EnumExtensionProcessorGeneric<sbyte>(typeToStringDictionary);
-            processorInt16 = new EnumExtensionProcessorGeneric<short>(typeToStringDictionary);
-            processorInt32 = new EnumExtensionProcessorGeneric<int>(typeToStringDictionary);
-            processorInt64 = new EnumExtensionProcessorGeneric<long>(typeToStringDictionary);
-            processorByte = new EnumExtensionProcessorGeneric<byte>(typeToStringDictionary);
-            processorUInt16 = new EnumExtensionProcessorGeneric<ushort>(typeToStringDictionary);
-            processorUInt32 = new EnumExtensionProcessorGeneric<uint>(typeToStringDictionary);
-            processorUInt64 = new EnumExtensionProcessorGeneric<ulong>(typeToStringDictionary);
-            processorInt32Flags = new EnumExtensionProcessorInt32Flags(typeToStringDictionary);
+            _processorSByte = new EnumExtensionProcessorGeneric<sbyte>(_typeToStringDictionary);
+            _processorInt16 = new EnumExtensionProcessorGeneric<short>(_typeToStringDictionary);
+            _processorInt32 = new EnumExtensionProcessorGeneric<int>(_typeToStringDictionary);
+            _processorInt64 = new EnumExtensionProcessorGeneric<long>(_typeToStringDictionary);
+            _processorByte = new EnumExtensionProcessorGeneric<byte>(_typeToStringDictionary);
+            _processorUInt16 = new EnumExtensionProcessorGeneric<ushort>(_typeToStringDictionary);
+            _processorUInt32 = new EnumExtensionProcessorGeneric<uint>(_typeToStringDictionary);
+            _processorUInt64 = new EnumExtensionProcessorGeneric<ulong>(_typeToStringDictionary);
+            _processorInt32Flags = new EnumExtensionProcessorFlagsGeneric<int>(_typeToStringDictionary);
+            _processorUInt32Flags = new EnumExtensionProcessorFlagsGeneric<uint>(_typeToStringDictionary);
+            _processorUInt64Flags = new EnumExtensionProcessorFlagsGeneric<ulong>(_typeToStringDictionary);
+            _processorInt64Flags = new EnumExtensionProcessorFlagsGeneric<long>(_typeToStringDictionary);
+            _processorInt16Flags = new EnumExtensionProcessorFlagsGeneric<short>(_typeToStringDictionary);
+            _processorUInt16Flags = new EnumExtensionProcessorFlagsGeneric<ushort>(_typeToStringDictionary);
+            _processorSByteFlags = new EnumExtensionProcessorFlagsGeneric<sbyte>(_typeToStringDictionary);
+            _processorByteFlags = new EnumExtensionProcessorFlagsGeneric<byte>(_typeToStringDictionary);
         }
 
         private static void InitializeDictionary()
@@ -65,10 +70,10 @@ namespace UniEnumExtension
 
             void AddMethodDefinitionToDictionary(string name)
             {
-                typeToStringDictionary.Add(name, GetToStringMethodDefinition(systemModule, name));
+                _typeToStringDictionary.Add(name, GetToStringMethodDefinition(systemModule, name));
             }
 
-            typeToStringDictionary = new Dictionary<string, MethodDefinition>(8);
+            _typeToStringDictionary = new Dictionary<string, MethodDefinition>(8);
             AddMethodDefinitionToDictionary("Byte");
             AddMethodDefinitionToDictionary("SByte");
             AddMethodDefinitionToDictionary("Int16");
@@ -123,28 +128,28 @@ namespace UniEnumExtension
                 switch (valueFieldDefinition.FieldType.Name)
                 {
                     case "Byte":
-                        processorByteFlags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorByteFlags.Process(enumTypeDefinition, valueFieldDefinition);
                         break;
                     case "SByte":
-                        processorSByteFlags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorSByteFlags.Process(enumTypeDefinition, valueFieldDefinition);
                         break;
                     case "UInt16":
-                        processorUInt16Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt16Flags.Process(enumTypeDefinition, valueFieldDefinition);
                         break;
                     case "UInt32":
-                        processorUInt32Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt32Flags.Process(enumTypeDefinition, valueFieldDefinition);
                         break;
                     case "UInt64":
-                        processorUInt64Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt64Flags.Process(enumTypeDefinition, valueFieldDefinition);
                         break;
                     case "Int16":
-                        processorInt16Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt16Flags.Process(enumTypeDefinition, valueFieldDefinition);
                         break;
                     case "Int32":
-                        processorInt32Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt32Flags.Process(enumTypeDefinition, valueFieldDefinition);
                         break;
                     case "Int64":
-                        processorInt64Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt64Flags.Process(enumTypeDefinition, valueFieldDefinition);
                         break;
                 }
                 return;
@@ -152,28 +157,28 @@ namespace UniEnumExtension
             switch (valueFieldDefinition.FieldType.Name)
             {
                 case "Byte":
-                    processorByte.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorByte.Process(enumTypeDefinition, valueFieldDefinition);
                     break;
                 case "SByte":
-                    processorSByte.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorSByte.Process(enumTypeDefinition, valueFieldDefinition);
                     break;
                 case "UInt16":
-                    processorUInt16.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt16.Process(enumTypeDefinition, valueFieldDefinition);
                     break;
                 case "UInt32":
-                    processorUInt32.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt32.Process(enumTypeDefinition, valueFieldDefinition);
                     break;
                 case "UInt64":
-                    processorUInt64.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt64.Process(enumTypeDefinition, valueFieldDefinition);
                     break;
                 case "Int16":
-                    processorInt16.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt16.Process(enumTypeDefinition, valueFieldDefinition);
                     break;
                 case "Int32":
-                    processorInt32.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt32.Process(enumTypeDefinition, valueFieldDefinition);
                     break;
                 case "Int64":
-                    processorInt64.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt64.Process(enumTypeDefinition, valueFieldDefinition);
                     break;
             }
         }

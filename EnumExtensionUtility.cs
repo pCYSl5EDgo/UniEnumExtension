@@ -42,18 +42,45 @@ namespace UniEnumExtension
             }
         }
 
-        public static MethodDefinition MakeToString(TypeDefinition typeDefinition) => new MethodDefinition("ToString", MethodAttributes.Final | MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.Virtual, typeDefinition.Module.TypeSystem.String);
+        public static MethodDefinition MakeIEquatable(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition, ModuleDefinition systemModule)
+        {
+            var interfaceIEquatable = systemModule.GetType("System", "IEquatable`1");
+            var mainModule = enumTypeDefinition.Module;
+            enumTypeDefinition.Interfaces.Add(new InterfaceImplementation(new GenericInstanceType(mainModule.ImportReference(interfaceIEquatable)) { GenericArguments = { enumTypeDefinition } }));
+            var equals = new MethodDefinition("Equals", MethodAttributes.Final | MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.NewSlot | MethodAttributes.HideBySig, mainModule.TypeSystem.Boolean)
+            {
+                Parameters = { new ParameterDefinition(enumTypeDefinition) },
+                AggressiveInlining = true,
+            };
+            var processor = equals.Body.GetILProcessor();
+            processor
+                .LdArg(0)
+                .LdFld(valueFieldDefinition)
+                .LdArg(1)
+                .Ceq()
+                .Ret();
+            return equals;
+        }
 
-        public static void ProcessCount0(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition)
+        public static MethodDefinition MakeToString(TypeDefinition typeDefinition)
+            => new MethodDefinition("ToString",
+                MethodAttributes.Final | MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.Virtual,
+                typeDefinition.Module.TypeSystem.String)
+            {
+                AggressiveInlining = true,
+            };
+
+        public static bool ProcessCount0(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition)
         {
             methodToString.Body.GetILProcessor()
                 .LdArg(0)
                 .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
                 .Ret();
+            return true;
         }
 
-        public static void ProcessCount1<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition, FieldDefinition minFieldDefinition, T minValue) where T : unmanaged, IComparable<T>
+        public static bool ProcessCount1<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition, FieldDefinition minFieldDefinition, T minValue) where T : unmanaged, IComparable<T>
         {
             var processor = methodToString.Body.GetILProcessor();
             var defaultIl = Instruction.Create(OpCodes.Ldarg_0);
@@ -77,6 +104,7 @@ namespace UniEnumExtension
                 .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
                 .Ret();
+            return true;
         }
 
         public static void ProcessCount2<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition, FieldDefinition minFieldDefinition, FieldDefinition maxFieldDefinition, T minValue, T maxValue) where T : unmanaged, IComparable<T>
@@ -126,27 +154,24 @@ namespace UniEnumExtension
             ref var minValue = ref sortedArray[0].value;
             if (IsContinuous(sortedArray))
             {
-                ProcessContinuous(sortedArray, processor, minValue, elseRoutineFirst);
+                processor.ProcessContinuous(sortedArray, minValue, elseRoutineFirst);
+            }
+            else if (NumberHelper.IsDifferenceLessThanOrEqualsTo(minValue, sortedArray[sortedArray.LongLength - 1].value, sortedArray.LongLength << 1, out var actualCount))
+            {
+                processor.MakeSortedArray(sortedArray, actualCount, elseRoutineFirst);
             }
             else
             {
-                ref var maxValue = ref sortedArray[sortedArray.LongLength - 1].value;
-                if (NumberHelper.IsDifferenceLessThanOrEqualsTo(minValue, maxValue, sortedArray.LongLength << 1, out var actualCount))
-                {
-                    MakeSortedArray(sortedArray, actualCount, processor, elseRoutineFirst);
-                }
-                else
-                {
-                    elseRoutineFirst = ProcessDiscontinuous(method, valueFieldDefinition, sortedArray, ref minValue, processor);
-                }
+                processor.ProcessDiscontinuous(method, valueFieldDefinition, sortedArray, ref minValue, elseRoutineFirst);
             }
             processor
                 .Add(elseRoutineFirst)
+                .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(baseToStringMethodDefinition))
                 .Ret();
         }
 
-        private static void MakeSortedArray<T>((string name, T value)[] sortedArray, long actualCount, ILProcessor processor, Instruction elseRoutineFirst)
+        public static void MakeSortedArray<T>(this ILProcessor processor, (string name, T value)[] sortedArray, long actualCount, Instruction elseRoutineFirst)
             where T : unmanaged, IComparable<T>, IEquatable<T>
         {
             var destinations = new Instruction[actualCount];
@@ -168,12 +193,11 @@ namespace UniEnumExtension
             }
         }
 
-        private static Instruction ProcessDiscontinuous<T>(MethodDefinition method, FieldDefinition valueFieldDefinition, (string name, T value)[] sortedArray, ref T minValue, ILProcessor processor)
+        public static void ProcessDiscontinuous<T>(this ILProcessor processor, MethodDefinition method, FieldDefinition valueFieldDefinition, (string name, T value)[] sortedArray, ref T minValue, Instruction elseRoutineFirst)
             where T : unmanaged, IComparable<T>
         {
             var variableDefinition = new VariableDefinition(valueFieldDefinition.FieldType);
             method.Body.Variables.Add(variableDefinition);
-            var elseRoutineFirst = Instruction.Create(OpCodes.Ldloca_S, variableDefinition);
 
             processor
                 .Dup()
@@ -194,7 +218,6 @@ namespace UniEnumExtension
             {
                 processor.LdLoc(0).AddRange(BinarySearchGroup(sortedArray, groups, 0, groups.Length - 1, elseRoutineFirst));
             }
-            return elseRoutineFirst;
         }
 
         private static IEnumerable<Instruction> BinarySearchGroup<T>((string name, T value)[] sortedArray, ArraySegment<(string name, T value)>[] groups, int minIncluded, int maxIncluded, Instruction elseRoutineFirstInstruction)
@@ -289,7 +312,7 @@ namespace UniEnumExtension
         // ReSharper disable once PossibleNullReferenceException
         private static ref (string name, T value) GetLast<T>(this ref ArraySegment<(string name, T value)> segment) => ref segment.Array[segment.Offset + segment.Count - 1];
 
-        private static void ProcessContinuous<T>((string name, T value)[] sortedArray, ILProcessor processor, T minValue, Instruction elseRoutineFirst)
+        public static void ProcessContinuous<T>(this ILProcessor processor, (string name, T value)[] sortedArray, T minValue, Instruction elseRoutineFirst)
             where T : unmanaged, IComparable<T>
         {
             var destinations = new Instruction[sortedArray.Length];

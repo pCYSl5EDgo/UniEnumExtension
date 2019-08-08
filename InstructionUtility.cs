@@ -5,27 +5,17 @@ namespace UniEnumExtension
 {
     public static class InstructionUtility
     {
-        public static Instruction[] LoadConstantGeneric<T>(T value) where T : unmanaged, IComparable<T>
+        public static unsafe Instruction[] LoadConstantGeneric<T>(T value)
+            where T : unmanaged, IComparable<T>
         {
-            switch (value)
-            {
-                case byte v:
-                    return new[] { LoadConstant((sbyte)v) };
-                case sbyte v:
-                    return new[] { LoadConstant(v) };
-                case short v:
-                    return new[] { LoadConstant(v) };
-                case ushort v:
-                    return new[] { LoadConstant(v) };
-                case int v:
-                    return new[] { LoadConstant(v) };
-                case uint v:
-                    return new[] { LoadConstant((int)v) };
-                case long v:
-                    return LoadConstant(v);
-                case ulong v:
-                    return LoadConstant((long)v);
-            }
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(byte))
+                return new[] { LoadConstant(*(sbyte*)&value) };
+            if (typeof(T) == typeof(short) || typeof(T) == typeof(ushort))
+                return new[] { LoadConstant(*(short*)&value) };
+            if (typeof(T) == typeof(int) || typeof(T) == typeof(uint))
+                return new[] { LoadConstant(*(int*)&value) };
+            if (typeof(T) == typeof(long) || typeof(T) == typeof(ulong))
+                return LoadConstant(*(long*)&value);
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);
         }
 
