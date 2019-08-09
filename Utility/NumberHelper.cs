@@ -67,15 +67,17 @@ namespace UniEnumExtension
             }
             if (typeof(T) == typeof(uint))
             {
-                return (actualCount = (int)(*(uint*)&max - *(uint*)&min + 1)) <= value;
+                return (actualCount = *(uint*)&max - *(uint*)&min + 1) <= value;
             }
             if (typeof(T) == typeof(long))
             {
-                return (actualCount = *(long*)&max - *(long*)&min + 1) <= value;
+                actualCount = *(long*)&max - *(long*)&min + 1;
+                return actualCount >= 1L && actualCount <= value;
             }
             if (typeof(T) == typeof(ulong))
             {
-                return (actualCount = (long)(*(ulong*)&max - *(ulong*)&min + 1)) <= value;
+                actualCount = (long)(*(ulong*)&max - *(ulong*)&min + 1);
+                return actualCount >= 1L && actualCount <= value;
             }
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);
         }

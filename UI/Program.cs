@@ -34,6 +34,7 @@ namespace UniEnumExtension
             if (EditorApplication.isPlayingOrWillChangePlaymode) { return; }
 
             var guidArray = AssetDatabase.FindAssets("t:" + nameof(ProgramStatus));
+            if(guidArray.Length == 0) return;
             var programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
             var assemblyPaths = programStatus.OutputPaths.Where((_, index) => programStatus.Enables[index]);
             EnumExtender.Execute(assemblyPaths);
