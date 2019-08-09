@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cb9cba46fcce6a349aa9d4bbf503a7f7, type: 3}
   m_Name: ProgramStatus
   m_EditorClassIdentifier: 
-  ShouldProcessAllAssemblies: 0
-  Enables: 01010001
+  ShouldProcessAllAssemblies: 1
+  Enables: 01010101
   Names:
   - Unity.Mathematics
   - Unity.Burst

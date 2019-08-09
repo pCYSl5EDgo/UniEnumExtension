@@ -2,6 +2,8 @@
 ===
 Blazingly Fast Enum Library.
 
+[日本語](README-jp.md)
+
 ## Features
 
 Enum's ToString() is known as a virtual method and slow one. 
