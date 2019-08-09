@@ -13,13 +13,15 @@ MonoBehaviour:
   m_Name: ProgramStatus
   m_EditorClassIdentifier: 
   ShouldProcessAllAssemblies: 1
-  Enables: 01010101
+  Enables: 0101010101
   Names:
+  - Unity.TextMeshPro
   - Unity.Mathematics
   - Unity.Burst
   - Assembly-CSharp
   - TestEnum
   OutputPaths:
+  - Library/ScriptAssemblies/Unity.TextMeshPro.dll
   - Library/ScriptAssemblies/Unity.Mathematics.dll
   - Library/ScriptAssemblies/Unity.Burst.dll
   - Library/ScriptAssemblies/Assembly-CSharp.dll

@@ -1,19 +1,21 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+using UnityEngine;
 
 namespace UniEnumExtension
 {
-    public sealed class PostProcessHook : IPostBuildPlayerScriptDLLs
+    public sealed class EnumExtensionPostBuildPlayerScriptDll : IPostBuildPlayerScriptDLLs
     {
         private static readonly MethodInfo BeginBuildStep;
         private static readonly MethodInfo EndBuildStep;
-        private static readonly object[] UniEnumExtension = { nameof(UniEnumExtension) };
-        private static readonly object[] Step = new object[1];
-        static PostProcessHook()
+        private readonly object[] uniEnumExtension = { nameof(uniEnumExtension) };
+        private readonly object[] step = new object[1];
+        static EnumExtensionPostBuildPlayerScriptDll()
         {
             BeginBuildStep = typeof(BuildReport).GetMethod(nameof(BeginBuildStep), BindingFlags.Instance | BindingFlags.NonPublic);
             EndBuildStep = typeof(BuildReport).GetMethod(nameof(EndBuildStep), BindingFlags.Instance | BindingFlags.NonPublic);
@@ -22,27 +24,32 @@ namespace UniEnumExtension
         public int callbackOrder => 1;
         public void OnPostBuildPlayerScriptDLLs(BuildReport report)
         {
-            Step[0] = BeginBuildStep.Invoke(report, UniEnumExtension);
+            step[0] = BeginBuildStep.Invoke(report, uniEnumExtension);
             try
             {
-                Impl(report);
+                Implement(report);
             }
             finally
             {
-                EndBuildStep.Invoke(report, Step);
+                EndBuildStep.Invoke(report, step);
             }
         }
 
-        private void Impl(BuildReport report)
+        private void Implement(BuildReport report)
         {
             var guidArray = AssetDatabase.FindAssets("t:" + nameof(ProgramStatus));
             var programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
             programStatus.Initialize();
-            var targetNames = programStatus.OutputPaths.Where((_, i) => programStatus.Enables[i]).Select(Path.GetFileName).ToArray();
+            var targetNames = programStatus.Enables.Zip(programStatus.OutputPaths, (enable, outputPath) => (enable, Path.GetFileName(outputPath))).ToArray();
             var assemblyPaths = report.files.Where(buildFile =>
             {
+                if (buildFile.role != "ManagedLibrary")
+                {
+                    return false;
+                }
                 if (string.IsNullOrWhiteSpace(buildFile.path)) return false;
-                return targetNames.Contains(Path.GetFileName(buildFile.path));
+                var buildName = Path.GetFileName(buildFile.path);
+                return targetNames.All(pair => pair.Item2 != buildName) || targetNames.First(pair => pair.Item2 == buildName).Item1;
             }).Select(buildFile => buildFile.path);
             EnumExtender.Execute(assemblyPaths);
         }

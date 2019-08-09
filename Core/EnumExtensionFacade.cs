@@ -1,8 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Mono.Cecil;
 using UnityEditor;
+using UnityEngine;
 
 namespace UniEnumExtension
 {
@@ -25,7 +28,7 @@ namespace UniEnumExtension
         private static IEnumExtensionProcessor<byte> _processorByteFlags;
         private static IEnumExtensionProcessor<sbyte> _processorSByte;
         private static IEnumExtensionProcessor<sbyte> _processorSByteFlags;
-        private static ModuleDefinition SystemModule;
+        private static ModuleDefinition _systemModule;
 
         public static void Execute(IEnumerable<string> assemblyPaths)
         {
@@ -35,7 +38,9 @@ namespace UniEnumExtension
             {
                 foreach (var assemblyPath in assemblyPaths)
                 {
+                    var start = DateTime.Now.Ticks;
                     ProcessEachAssembly(assemblyPath);
+                    Debug.Log(assemblyPath + " : " + new DateTime(DateTime.Now.Ticks - start).Millisecond);
                 }
             }
             finally
@@ -56,13 +61,13 @@ namespace UniEnumExtension
             _processorUInt32 = _processorUInt32Flags = null;
             _processorInt64 = _processorInt64Flags = null;
             _processorUInt64 = _processorUInt64Flags = null;
-            SystemModule.Dispose();
-            SystemModule = null;
+            _systemModule.Dispose();
+            _systemModule = null;
         }
 
         private static void InitializeFields()
         {
-            SystemModule = GetSystemModule();
+            _systemModule = GetSystemModule();
             InitializeDictionary();
             _processorSByte = new EnumExtensionProcessorGeneric<sbyte>(_typeToStringDictionary);
             _processorInt16 = new EnumExtensionProcessorGeneric<short>(_typeToStringDictionary);
@@ -86,7 +91,7 @@ namespace UniEnumExtension
         {
             void AddMethodDefinitionToDictionary(string name)
             {
-                _typeToStringDictionary.Add(name, GetToStringMethodDefinition(SystemModule, name));
+                _typeToStringDictionary.Add(name, GetToStringMethodDefinition(_systemModule, name));
             }
 
             _typeToStringDictionary = new Dictionary<string, MethodDefinition>(8);
@@ -107,17 +112,28 @@ namespace UniEnumExtension
 
         private static void ProcessEachAssembly(string assemblyPath)
         {
-            using (var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.ReadWrite))
+            try
             {
-                var module = ModuleDefinition.ReadModule(stream);
-                foreach (var typeDefinition in module.Types)
+                using (var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.ReadWrite))
                 {
-                    if (typeDefinition.IsEnum)
-                        ProcessEachEnumType(typeDefinition);
-                    else if (typeDefinition.HasNestedTypes)
-                        ProcessNestedTypes(typeDefinition);
+                    var module = ModuleDefinition.ReadModule(stream);
+                    foreach (var typeDefinition in module.Types)
+                    {
+                        if (typeDefinition.IsEnum)
+                            ProcessEachEnumType(typeDefinition);
+                        else if (typeDefinition.HasNestedTypes)
+                            ProcessNestedTypes(typeDefinition);
+                    }
+                    module.Write(stream);
                 }
-                module.Write(stream);
+            }
+            catch (FileNotFoundException)
+            {
+                Debug.LogWarning("File Not Found!\n" + assemblyPath);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Debug.LogWarning("Unauthorized Access!\n" + assemblyPath);
             }
         }
 
