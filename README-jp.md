@@ -1,8 +1,8 @@
 # UniEnumExtension
 ===
-数倍から数百倍Enumを高速化するライブラリ。
+数倍から数百倍列挙型を高速化するライブラリ。
 
-## Features
+## 機能概要
 
 列挙型のToString()は内部的に仮想メソッドであるEnum.ToString()が呼ばれることが知られています。
 そしてそれはリフレクションを使用しており低速です。
@@ -14,11 +14,16 @@
 UniEnumExtensionはあなたのソースコードに一切の変更を加えずとも、列挙型が優れた性能を持って振る舞うようにします。
 Unity Playerをビルドする時に静的にIL生成を行い、あなたのDLLを適切に編集します。
 
-## Requirement
+## ライセンス
+
+GNU General Public License version 3とプロプライエタリライセンスのデュアルライセンスです。
+非GPLなライセンスをお求めの方は[Booth](https://pcysl5edgo.booth.pm/)からご購入ください。
+
+## 必須環境
 **Unity 2018.4**以上を対象としています。
 https://unity3d.com/get-unity/download からダウンロードすることをおすすめします。
 
-## UniEnumExtension Package Install(1)
+## インストール方法 その１
 このリポジトリをあなたのUnityプロジェクトの**Package**以下にコピーします。
 
 基本的にgit cloneを以下のようにcmdやターミナルから行えばよいでしょう。
@@ -28,7 +33,7 @@ cd Packages
 git clone https://github.com/pCYSl5EDgo/UniEnumExtension.git
 ```
 
-## UniEnumExtension Package Install(2)
+## インストール方法 その２
 
 `Packages/manifest.json`があるはずです。
 そこに以下のように一行をdependencies内に追記してください。
@@ -41,3 +46,5 @@ git clone https://github.com/pCYSl5EDgo/UniEnumExtension.git
   },
 }
 ```
+
+## 性能比較

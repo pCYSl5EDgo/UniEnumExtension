@@ -15,6 +15,11 @@ It's a not bad solution but makes your solution depending on those libraries.
 This library never forces your solution to depend on it.
 It just rewrites your dlls so that your solution have much more eddifient and much less allocation Enum's APIs.
 
+## License
+
+This library is provided under the GPL-v3 license and a commercial license.
+You can purchase this software on the [Booth website](https://pcysl5edgo.booth.pm/).
+
 ## Requirement
 Install **Unity 2018.4** or above. You can download the latest Unity on https://unity3d.com/get-unity/download.
 
@@ -41,3 +46,5 @@ Find `Packages/manifest.json` in your project and edit it to look like this:
   },
 }
 ```
+
+## Performance
