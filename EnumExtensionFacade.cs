@@ -25,6 +25,7 @@ namespace UniEnumExtension
         private static IEnumExtensionProcessor<byte> _processorByteFlags;
         private static IEnumExtensionProcessor<sbyte> _processorSByte;
         private static IEnumExtensionProcessor<sbyte> _processorSByteFlags;
+        private static ModuleDefinition SystemModule;
 
         public static void Execute(IEnumerable<string> assemblyPaths)
         {
@@ -39,12 +40,29 @@ namespace UniEnumExtension
             }
             finally
             {
+                Dispose();
                 EditorApplication.UnlockReloadAssemblies();
             }
         }
 
+        private static void Dispose()
+        {
+            _typeToStringDictionary = null;
+            _processorByte = _processorByteFlags = null;
+            _processorSByte = _processorSByteFlags = null;
+            _processorInt16 = _processorInt16Flags = null;
+            _processorUInt16 = _processorUInt16Flags = null;
+            _processorInt32 = _processorInt32Flags = null;
+            _processorUInt32 = _processorUInt32Flags = null;
+            _processorInt64 = _processorInt64Flags = null;
+            _processorUInt64 = _processorUInt64Flags = null;
+            SystemModule.Dispose();
+            SystemModule = null;
+        }
+
         private static void InitializeFields()
         {
+            SystemModule = GetSystemModule();
             InitializeDictionary();
             _processorSByte = new EnumExtensionProcessorGeneric<sbyte>(_typeToStringDictionary);
             _processorInt16 = new EnumExtensionProcessorGeneric<short>(_typeToStringDictionary);
@@ -66,11 +84,9 @@ namespace UniEnumExtension
 
         private static void InitializeDictionary()
         {
-            var systemModule = GetSystemModule();
-
             void AddMethodDefinitionToDictionary(string name)
             {
-                _typeToStringDictionary.Add(name, GetToStringMethodDefinition(systemModule, name));
+                _typeToStringDictionary.Add(name, GetToStringMethodDefinition(SystemModule, name));
             }
 
             _typeToStringDictionary = new Dictionary<string, MethodDefinition>(8);

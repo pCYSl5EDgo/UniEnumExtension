@@ -73,7 +73,7 @@ namespace UniEnumExtension
         {
             var processor = method.Body.GetILProcessor();
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
-            processor.LdArg(0).LdFld(valueFieldDefinition);
+            processor.LdArg(0).LdObj(valueFieldDefinition.FieldType);
             ref var minValue = ref sortedArray[0].value;
             var actualCount = sortedArray[sortedArray.Length - 1].value - minValue + 1;
             if (actualCount == sortedArray.Length)
@@ -87,7 +87,6 @@ namespace UniEnumExtension
 
             processor
                 .Add(elseRoutineFirst)
-                .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(baseToStringMethodDefinition))
                 .Ret();
         }
@@ -96,7 +95,7 @@ namespace UniEnumExtension
         {
             var processor = method.Body.GetILProcessor();
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
-            processor.LdArg(0).LdFld(valueFieldDefinition);
+            processor.LdArg(0).LdObj(valueFieldDefinition.FieldType);
             ref var minValue = ref sortedArray[0].value;
             var actualCount = sortedArray[sortedArray.Length - 1].value - minValue + 1UL;
             if (actualCount == (ulong)sortedArray.Length)
@@ -110,7 +109,6 @@ namespace UniEnumExtension
 
             processor
                 .Add(elseRoutineFirst)
-                .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(baseToStringMethodDefinition))
                 .Ret();
         }

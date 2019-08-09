@@ -55,7 +55,7 @@ namespace UniEnumExtension
             var processor = equals.Body.GetILProcessor();
             processor
                 .LdArg(0)
-                .LdFld(valueFieldDefinition)
+                .LdObj(valueFieldDefinition.FieldType)
                 .LdArg(1)
                 .Ceq()
                 .Ret();
@@ -74,7 +74,6 @@ namespace UniEnumExtension
         {
             methodToString.Body.GetILProcessor()
                 .LdArg(0)
-                .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
                 .Ret();
             return true;
@@ -93,7 +92,7 @@ namespace UniEnumExtension
             else
             {
                 processor
-                    .LdFld(valueFieldDefinition)
+                    .LdObj(valueFieldDefinition.FieldType)
                     .LdC(minValue)
                     .Add(Instruction.Create(OpCodes.Bne_Un_S, defaultIl));
             }
@@ -101,7 +100,6 @@ namespace UniEnumExtension
                 .LdStr(minFieldDefinition.Name)
                 .Ret()
                 .Add(defaultIl)
-                .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
                 .Ret();
             return true;
@@ -114,19 +112,19 @@ namespace UniEnumExtension
             if (NumberHelper.EqualsZero(minValue))
             {
                 var shortJump = InstructionUtility.LoadConstantGeneric(maxValue);
-                processor.LdArg(0).LdFld(valueFieldDefinition).Dup().BrTrueS(shortJump[0]).Pop().LdStr(minFieldDefinition.Name).Ret().AddRange(shortJump).BneS(defaultIl).LdStr(maxFieldDefinition.Name).Ret();
+                processor.LdArg(0).LdObj(valueFieldDefinition.FieldType).Dup().BrTrueS(shortJump[0]).Pop().LdStr(minFieldDefinition.Name).Ret().AddRange(shortJump).BneS(defaultIl).LdStr(maxFieldDefinition.Name).Ret();
             }
             else if (NumberHelper.EqualsZero(maxValue))
             {
                 var shortJump = InstructionUtility.LoadConstantGeneric(minValue);
-                processor.LdArg(0).LdFld(valueFieldDefinition).Dup().BrTrueS(shortJump[0]).Pop().LdStr(maxFieldDefinition.Name).Ret().AddRange(shortJump).BneS(defaultIl).LdStr(minFieldDefinition.Name).Ret();
+                processor.LdArg(0).LdObj(valueFieldDefinition.FieldType).Dup().BrTrueS(shortJump[0]).Pop().LdStr(maxFieldDefinition.Name).Ret().AddRange(shortJump).BneS(defaultIl).LdStr(minFieldDefinition.Name).Ret();
             }
             else
             {
                 var shortJump = InstructionUtility.LoadConstantGeneric(maxValue);
                 processor
                     .LdArg(0)
-                    .LdFld(valueFieldDefinition)
+                    .LdObj(valueFieldDefinition.FieldType)
                     .Dup()
                     .LdC(minValue)
                     .BneS(shortJump[0])
@@ -140,7 +138,6 @@ namespace UniEnumExtension
             }
             processor
                 .Add(defaultIl)
-                .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
                 .Ret();
         }
@@ -150,7 +147,7 @@ namespace UniEnumExtension
         {
             var processor = method.Body.GetILProcessor();
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
-            processor.LdArg(0).LdFld(valueFieldDefinition);
+            processor.LdArg(0).LdObj(valueFieldDefinition.FieldType);
             ref var minValue = ref sortedArray[0].value;
             if (IsContinuous(sortedArray))
             {
@@ -166,7 +163,6 @@ namespace UniEnumExtension
             }
             processor
                 .Add(elseRoutineFirst)
-                .LdFldA(valueFieldDefinition)
                 .Call(valueFieldDefinition.Module.ImportReference(baseToStringMethodDefinition))
                 .Ret();
         }
