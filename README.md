@@ -1,5 +1,5 @@
 ﻿# UniEnumExtension
-===
+
 Blazingly Fast Enum Library.
 
 [日本語](README-jp.md)
