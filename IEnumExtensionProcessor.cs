@@ -6,6 +6,7 @@ namespace UniEnumExtension
     public interface IEnumExtensionProcessor<T>
         where T : unmanaged, IComparable<T>
     {
-        void Process(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition);
+        void ProcessRewriteToString(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition);
+        void ProcessAddIEquatable(TypeDefinition enumTypeDefinition);
     }
 }

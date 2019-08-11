@@ -16,10 +16,14 @@ namespace UniEnumExtension
             this.typeToStringDictionary = typeToStringDictionary;
         }
 
-        public void Process(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition)
+        public void ProcessRewriteToString(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition)
         {
             AddToString(enumTypeDefinition, valueFieldDefinition);
-            enumTypeDefinition.Methods.Add(EnumExtensionUtility.MakeIEquatable(enumTypeDefinition, valueFieldDefinition, typeToStringDictionary["Int32"].Module));
+        }
+
+        public void ProcessAddIEquatable(TypeDefinition enumTypeDefinition)
+        {
+            enumTypeDefinition.Methods.Add(EnumExtensionUtility.MakeIEquatable(enumTypeDefinition, typeToStringDictionary["Int32"].Module));
         }
 
         private void AddToString(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition)

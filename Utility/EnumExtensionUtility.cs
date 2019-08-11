@@ -42,7 +42,7 @@ namespace UniEnumExtension
             }
         }
 
-        public static MethodDefinition MakeIEquatable(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition, ModuleDefinition systemModule)
+        public static MethodDefinition MakeIEquatable(TypeDefinition enumTypeDefinition, ModuleDefinition systemModule)
         {
             var interfaceIEquatable = systemModule.GetType("System", "IEquatable`1");
             var mainModule = enumTypeDefinition.Module;
@@ -55,7 +55,7 @@ namespace UniEnumExtension
             var processor = equals.Body.GetILProcessor();
             processor
                 .LdArg(0)
-                .LdObj(valueFieldDefinition.FieldType)
+                .LdObj(enumTypeDefinition.Fields[0].FieldType)
                 .LdArg(1)
                 .Ceq()
                 .Ret();

@@ -49,7 +49,7 @@ namespace UniEnumExtension
             serializedObject.Update();
             EditorGUILayout.Space();
             var shouldProcess = shouldProcessAllProperty.boolValue;
-            var newShould = EditorGUILayout.ToggleLeft("Process All Assemblies", shouldProcess, "button");
+            var newShould = EditorGUILayout.ToggleLeft("ProcessRewriteToString All Assemblies", shouldProcess, "button");
             if (newShould ^ shouldProcess)
             {
                 shouldProcessAllProperty.boolValue = newShould;

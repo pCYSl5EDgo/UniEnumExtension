@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Mono.Cecil;
 using UnityEditor;
 using UnityEngine;
@@ -77,14 +76,14 @@ namespace UniEnumExtension
             _processorUInt16 = new EnumExtensionProcessorGeneric<ushort>(_typeToStringDictionary);
             _processorUInt32 = new EnumExtensionProcessorGeneric<uint>(_typeToStringDictionary);
             _processorUInt64 = new EnumExtensionProcessorGeneric<ulong>(_typeToStringDictionary);
-            _processorInt32Flags = new EnumExtensionProcessorFlagsGeneric<int>(_typeToStringDictionary);
-            _processorUInt32Flags = new EnumExtensionProcessorFlagsGeneric<uint>(_typeToStringDictionary);
-            _processorUInt64Flags = new EnumExtensionProcessorFlagsGeneric<ulong>(_typeToStringDictionary);
-            _processorInt64Flags = new EnumExtensionProcessorFlagsGeneric<long>(_typeToStringDictionary);
-            _processorInt16Flags = new EnumExtensionProcessorFlagsGeneric<short>(_typeToStringDictionary);
-            _processorUInt16Flags = new EnumExtensionProcessorFlagsGeneric<ushort>(_typeToStringDictionary);
-            _processorSByteFlags = new EnumExtensionProcessorFlagsGeneric<sbyte>(_typeToStringDictionary);
-            _processorByteFlags = new EnumExtensionProcessorFlagsGeneric<byte>(_typeToStringDictionary);
+            _processorInt32Flags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<int>(_typeToStringDictionary);
+            _processorUInt32Flags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<uint>(_typeToStringDictionary);
+            _processorInt16Flags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<short>(_typeToStringDictionary);
+            _processorUInt16Flags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<ushort>(_typeToStringDictionary);
+            _processorSByteFlags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<sbyte>(_typeToStringDictionary);
+            _processorByteFlags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<byte>(_typeToStringDictionary);
+            _processorUInt64Flags = new EnumExtensionProcessorFlags64BitSizeGeneric<ulong>(_typeToStringDictionary);
+            _processorInt64Flags = new EnumExtensionProcessorFlags64BitSizeGeneric<long>(_typeToStringDictionary);
         }
 
         private static void InitializeDictionary()
@@ -160,28 +159,36 @@ namespace UniEnumExtension
                 switch (valueFieldDefinition.FieldType.Name)
                 {
                     case "Byte":
-                        _processorByteFlags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorByteFlags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                        _processorByteFlags.ProcessAddIEquatable(enumTypeDefinition);
                         break;
                     case "SByte":
-                        _processorSByteFlags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorSByteFlags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                        _processorSByteFlags.ProcessAddIEquatable(enumTypeDefinition);
                         break;
                     case "UInt16":
-                        _processorUInt16Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt16Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt16Flags.ProcessAddIEquatable(enumTypeDefinition);
                         break;
                     case "UInt32":
-                        _processorUInt32Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt32Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt32Flags.ProcessAddIEquatable(enumTypeDefinition);
                         break;
                     case "UInt64":
-                        _processorUInt64Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt64Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                        _processorUInt64Flags.ProcessAddIEquatable(enumTypeDefinition);
                         break;
                     case "Int16":
-                        _processorInt16Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt16Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt16Flags.ProcessAddIEquatable(enumTypeDefinition);
                         break;
                     case "Int32":
-                        _processorInt32Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt32Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt32Flags.ProcessAddIEquatable(enumTypeDefinition);
                         break;
                     case "Int64":
-                        _processorInt64Flags.Process(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt64Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                        _processorInt64Flags.ProcessAddIEquatable(enumTypeDefinition);
                         break;
                 }
                 return;
@@ -189,28 +196,36 @@ namespace UniEnumExtension
             switch (valueFieldDefinition.FieldType.Name)
             {
                 case "Byte":
-                    _processorByte.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorByte.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                    _processorByte.ProcessAddIEquatable(enumTypeDefinition);
                     break;
                 case "SByte":
-                    _processorSByte.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorSByte.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                    _processorSByte.ProcessAddIEquatable(enumTypeDefinition);
                     break;
                 case "UInt16":
-                    _processorUInt16.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt16.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt16.ProcessAddIEquatable(enumTypeDefinition);
                     break;
                 case "UInt32":
-                    _processorUInt32.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt32.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt32.ProcessAddIEquatable(enumTypeDefinition);
                     break;
                 case "UInt64":
-                    _processorUInt64.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt64.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                    _processorUInt64.ProcessAddIEquatable(enumTypeDefinition);
                     break;
                 case "Int16":
-                    _processorInt16.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt16.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt16.ProcessAddIEquatable(enumTypeDefinition);
                     break;
                 case "Int32":
-                    _processorInt32.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt32.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt32.ProcessAddIEquatable(enumTypeDefinition);
                     break;
                 case "Int64":
-                    _processorInt64.Process(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt64.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
+                    _processorInt64.ProcessAddIEquatable(enumTypeDefinition);
                     break;
             }
         }
