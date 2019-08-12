@@ -7,6 +7,7 @@ namespace UniEnumExtension
 {
     public static class ArrayInitializerUtility
     {
+        const string Prefix = "pcysl5edgo_";
         public static TypeDefinition GetOrCreatePrivateImplementationDetails(this ModuleDefinition moduleDefinition, ModuleDefinition systemModuleDefinition)
         {
             const string typeName = "<PrivateImplementationDetails>";
@@ -35,6 +36,20 @@ namespace UniEnumExtension
             privateImplementationDetails.NestedTypes.Add(answer);
             return answer;
         }
+
+        //public static FieldDefinition GetOrCreateStaticStringArrayField(this ModuleDefinition moduleDefinition, TypeDefinition privateImplementationDetails, ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
+        //{
+        //    var enumNameArrayField = privateImplementationDetails.Fields.SingleOrDefault(x => x.IsStatic && x.IsInitOnly && x.IsAssembly && x.Name == Prefix + "EnumNames_" + enumTypeDefinition.Name);
+        //    if (!(enumNameArrayField is null)) return enumNameArrayField;
+
+        //}
+
+        //public static MethodDefinition GetOrStaticConstructor(this TypeDefinition privateImplementationDetails)
+        //{
+        //    var cctor = privateImplementationDetails.Methods.SingleOrDefault(x => x.IsStatic && x.IsPrivate && x.IsRuntimeSpecialName && x.IsSpecialName && x.Name == ".cctor");
+        //    if (!(cctor is null)) return cctor;
+        //    cctor = new MethodDefinition(".cctor", MethodAttributes.Private);
+        //}
 
         public static int CalculateEnumSize(this TypeDefinition enumTypeDefinition)
         {
@@ -65,13 +80,12 @@ namespace UniEnumExtension
             var elementSize = enumTypeDefinition.CalculateEnumSize();
             var size = elementSize * count;
             var type = moduleDefinition.GetOrCreateStaticArrayInitType(privateImplementationDetails, systemModuleDefinition, size);
-            const string prefix = "pcysl5edgo_";
-            var answer = type.Fields.FirstOrDefault(x => x.IsAssembly && x.IsStatic && x.IsInitOnly && x.FieldType.FullName == type.FullName && x.Name.StartsWith(prefix));
+            var answer = type.Fields.FirstOrDefault(x => x.IsAssembly && x.IsStatic && x.IsInitOnly && x.FieldType.FullName == type.FullName && x.Name.StartsWith(Prefix));
             if (!(answer is null)) return answer;
             string name;
             do
             {
-                name = prefix + Guid.NewGuid();
+                name = Prefix + Guid.NewGuid();
             } while (type.Fields.Any(x => x.Name == name));
             answer = new FieldDefinition(name, FieldAttributes.Assembly | FieldAttributes.Static | FieldAttributes.InitOnly | FieldAttributes.HasFieldRVA, type)
             {

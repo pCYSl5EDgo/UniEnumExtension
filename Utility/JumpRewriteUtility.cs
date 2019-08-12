@@ -1,5 +1,4 @@
 ﻿using Mono.Cecil.Cil;
-using UnityEngine;
 
 namespace UniEnumExtension
 {
