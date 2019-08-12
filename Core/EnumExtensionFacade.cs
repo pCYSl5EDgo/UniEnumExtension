@@ -71,6 +71,7 @@ namespace UniEnumExtension
             _enumsReplacer = new EnumsReplacer(new IMethodVisitor[]
             {
                 new GetValuesVisitor(),
+                new HasFlagVisitor(), 
                 // Don't need to implement because System.Enum.GetNames is fast enough!
                 // new GetNamesVisitor(),
             });

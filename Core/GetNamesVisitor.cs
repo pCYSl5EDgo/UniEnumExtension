@@ -15,7 +15,7 @@
 //            {
 //                return false;
 //            }
-//            var enumTypeDefinition = currentInstructionOperandEnumTypeReference as TypeDefinition ?? currentInstructionOperandEnumTypeReference.Resolve();
+//            var enumTypeDefinition = currentInstructionOperandEnumTypeReference.ToDefinition();
 //            if (!enumTypeDefinition.IsEnum)
 //            {
 //                return false;

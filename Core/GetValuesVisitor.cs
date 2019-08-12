@@ -23,7 +23,7 @@ namespace UniEnumExtension
                 castClassOrIsInstInstruction = default;
                 return false;
             }
-            tokenDefinition = typeToken as TypeDefinition ?? typeToken.Resolve();
+            tokenDefinition = typeToken.ToDefinition();
             if (!tokenDefinition.IsEnum)
             {
                 getTypeFromHandleInstruction = default;
