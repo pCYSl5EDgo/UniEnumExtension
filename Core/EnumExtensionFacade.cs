@@ -27,7 +27,8 @@ namespace UniEnumExtension
         private static IEnumExtensionProcessor<byte> _processorByteFlags;
         private static IEnumExtensionProcessor<sbyte> _processorSByte;
         private static IEnumExtensionProcessor<sbyte> _processorSByteFlags;
-        private static ModuleDefinition _systemModule;
+        private static IEnumsReplacer _enumsReplacer;
+        private static ModuleDefinition _systemModuleDefinition;
 
         public static void Execute(IEnumerable<string> assemblyPaths)
         {
@@ -60,13 +61,19 @@ namespace UniEnumExtension
             _processorUInt32 = _processorUInt32Flags = null;
             _processorInt64 = _processorInt64Flags = null;
             _processorUInt64 = _processorUInt64Flags = null;
-            _systemModule.Dispose();
-            _systemModule = null;
+            _systemModuleDefinition.Dispose();
+            _systemModuleDefinition = null;
         }
 
         private static void InitializeFields()
         {
-            _systemModule = GetSystemModule();
+            _systemModuleDefinition = GetSystemModule();
+            _enumsReplacer = new EnumsReplacer(new IMethodVisitor[]
+            {
+                new GetValuesVisitor(),
+                // Don't need to implement because System.Enum.GetNames is fast enough!
+                // new GetNamesVisitor(),
+            });
             InitializeDictionary();
             _processorSByte = new EnumExtensionProcessorGeneric<sbyte>(_typeToStringDictionary);
             _processorInt16 = new EnumExtensionProcessorGeneric<short>(_typeToStringDictionary);
@@ -90,7 +97,7 @@ namespace UniEnumExtension
         {
             void AddMethodDefinitionToDictionary(string name)
             {
-                _typeToStringDictionary.Add(name, GetToStringMethodDefinition(_systemModule, name));
+                _typeToStringDictionary.Add(name, GetToStringMethodDefinition(_systemModuleDefinition, name));
             }
 
             _typeToStringDictionary = new Dictionary<string, MethodDefinition>(8);
@@ -116,6 +123,7 @@ namespace UniEnumExtension
                 using (var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.ReadWrite))
                 {
                     var module = ModuleDefinition.ReadModule(stream);
+                    _enumsReplacer.Replace(module, _systemModuleDefinition);
                     foreach (var typeDefinition in module.Types)
                     {
                         if (typeDefinition.IsEnum)
