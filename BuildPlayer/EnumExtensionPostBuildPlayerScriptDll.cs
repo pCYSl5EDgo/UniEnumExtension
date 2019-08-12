@@ -1,11 +1,9 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
-using UnityEngine;
 
 namespace UniEnumExtension
 {
@@ -51,7 +49,10 @@ namespace UniEnumExtension
                 var buildName = Path.GetFileName(buildFile.path);
                 return targetNames.All(pair => pair.Item2 != buildName) || targetNames.First(pair => pair.Item2 == buildName).Item1;
             }).Select(buildFile => buildFile.path);
-            EnumExtender.Execute(assemblyPaths);
+            using (var extender = new EnumExtender(Path.GetDirectoryName(report.files[0].path)))
+            {
+                extender.Extend(assemblyPaths);
+            }
         }
     }
 }

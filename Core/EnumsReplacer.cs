@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using Mono.Cecil;
-using UnityEngine;
 
 namespace UniEnumExtension
 {
@@ -25,7 +24,10 @@ namespace UniEnumExtension
 
         private sealed class VisitorComparer : IComparer<IMethodVisitor>
         {
-            public int Compare(IMethodVisitor x, IMethodVisitor y) => x.Order.CompareTo(y.Order);
+            public int Compare(IMethodVisitor x, IMethodVisitor y)
+            {
+                return x is null ? -1 : y is null ? 1 : x.Order.CompareTo(y.Order);
+            }
         }
 
         public void Replace(ModuleDefinition moduleDefinition, ModuleDefinition systemModuleDefinition)

@@ -19,6 +19,9 @@ namespace UniEnumExtension
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);
         }
 
+        public static Instruction LoadConstant(bool value)
+            => Instruction.Create(value ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+
         public static Instruction LoadConstant(int value)
         {
             switch (value)

@@ -12,19 +12,19 @@ namespace UniEnumExtension
                &&
                ReplaceGetValues(moduleDefinition, systemModuleDefinition, processor, ref currentInstruction, tokenDefinition, getTypeFromHandleInstruction, getValuesInstruction, castClassOrIsInstInstruction);
 
-        private static bool DecideWhetherToReplace(ref Instruction currentInstruction, out TypeDefinition tokenDefinition, out Instruction getTypeFromHandleInstruction, out Instruction getValuesInstruction, out Instruction castClassOrIsInstInstruction)
+        private static bool DecideWhetherToReplace(ref Instruction currentInstruction, out TypeDefinition enumTypeDefinition, out Instruction getTypeFromHandleInstruction, out Instruction getValuesInstruction, out Instruction castClassOrIsInstInstruction)
         {
-            var typeToken = currentInstruction.Operand as TypeReference;
-            if (typeToken is null || !typeToken.IsValueType || typeToken.IsGenericInstance || typeToken.IsGenericParameter)
+            var enumTypeReference = currentInstruction.Operand as TypeReference;
+            if (enumTypeReference is null || !enumTypeReference.IsValueType || enumTypeReference.IsGenericInstance || enumTypeReference.IsGenericParameter)
             {
-                tokenDefinition = default;
+                enumTypeDefinition = default;
                 getTypeFromHandleInstruction = default;
                 getValuesInstruction = default;
                 castClassOrIsInstInstruction = default;
                 return false;
             }
-            tokenDefinition = typeToken.ToDefinition();
-            if (!tokenDefinition.IsEnum)
+            enumTypeDefinition = enumTypeReference.ToDefinition();
+            if (!enumTypeDefinition.IsEnum)
             {
                 getTypeFromHandleInstruction = default;
                 getValuesInstruction = default;
