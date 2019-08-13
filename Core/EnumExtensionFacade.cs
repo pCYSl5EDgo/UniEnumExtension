@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace UniEnumExtension
 {
-    internal class EnumExtender : IExtender
+    public sealed class EnumExtender : IExtender
     {
         private Dictionary<string, MethodDefinition> typeToStringDictionary;
         private IEnumExtensionProcessor<int> processorInt32;
@@ -43,17 +43,18 @@ namespace UniEnumExtension
             InitializeFields(assemblyPaths);
             foreach (var nameAndModule in nameToModuleDefinitionDictionary)
             {
-                var start = DateTime.Now.Ticks;
                 ProcessEachAssembly(nameAndModule.Value.module);
-                Debug.Log(nameAndModule.Key + " : " + new DateTime(DateTime.Now.Ticks - start).Millisecond);
             }
         }
 
         public void Dispose()
         {
-            foreach (var nameAndModule in nameToModuleDefinitionDictionary)
+            foreach (var pair in nameToModuleDefinitionDictionary)
             {
-                nameAndModule.Value.module.Write();
+                var (module, stream) = pair.Value;
+                module.Write();
+                module.Dispose();
+                stream.Dispose();
             }
             typeToStringDictionary = null;
             processorByte = processorByteFlags = null;
@@ -64,16 +65,7 @@ namespace UniEnumExtension
             processorUInt32 = processorUInt32Flags = null;
             processorInt64 = processorInt64Flags = null;
             processorUInt64 = processorUInt64Flags = null;
-            if (!(nameToModuleDefinitionDictionary is null))
-            {
-                foreach (var pair in nameToModuleDefinitionDictionary)
-                {
-                    var (module, stream) = pair.Value;
-                    module.Dispose();
-                    stream.Dispose();
-                }
-                nameToModuleDefinitionDictionary = null;
-            }
+            nameToModuleDefinitionDictionary = null;
             systemModuleDefinition.Dispose();
             systemModuleDefinition = null;
         }
