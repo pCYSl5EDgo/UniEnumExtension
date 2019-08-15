@@ -6,7 +6,7 @@ using Mono.Cecil.Cil;
 
 namespace UniEnumExtension
 {
-    public sealed class IsDefinedVisitor : IMethodVisitor
+    public sealed class IsDefinedVisitor
     {
         List<Instruction> instructions = new List<Instruction>();
         public OpCode TargetOpCode => OpCodes.Ldtoken;

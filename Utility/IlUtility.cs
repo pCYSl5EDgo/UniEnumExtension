@@ -74,7 +74,15 @@ namespace UniEnumExtension
             return processor.AddRange(InstructionUtility.LoadConstant(value)).Sub();
         }
 
+        public static ILProcessor ConvUnsigned(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Conv_U));
+
         public static ILProcessor Ceq(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Ceq));
+        public static ILProcessor LdC0Ceq(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Ldc_I4_0)).Add(Instruction.Create(OpCodes.Ceq));
+        public static ILProcessor Cgt<T>(this ILProcessor processor) => processor.Add(InstructionUtility.Cgt<T>());
+        public static ILProcessor Clt<T>(this ILProcessor processor) => processor.Add(InstructionUtility.Clt<T>());
+
+        public static ILProcessor Or(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Or));
+        public static ILProcessor And(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.And));
 
         public static ILProcessor Dup(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Dup));
         public static ILProcessor Pop(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Pop));
@@ -97,9 +105,45 @@ namespace UniEnumExtension
                 return processor.AddRange(InstructionUtility.LoadConstant(*(long*)&value));
             if (typeof(T) == typeof(ulong))
                 return processor.AddRange(InstructionUtility.LoadConstant(*(long*)&value));
+            if (typeof(T) == typeof(float))
+                return processor.Add(InstructionUtility.LoadConstant(*(float*)&value));
+            if (typeof(T) == typeof(double))
+                return processor.Add(InstructionUtility.LoadConstant(*(double*)&value));
+            if (typeof(T) == typeof(bool))
+                return processor.Add(InstructionUtility.LoadConstant(*(bool*)&value));
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);
         }
 
+        public static ILProcessor LdC(this ILProcessor processor, object value)
+        {
+            switch (value)
+            {
+                case int v:
+                    return processor.LdC(v);
+                case uint v:
+                    return processor.LdC(v);
+                case long v:
+                    return processor.LdC(v);
+                case ulong v:
+                    return processor.LdC(v);
+                case sbyte v:
+                    return processor.LdC(v);
+                case byte v:
+                    return processor.LdC(v);
+                case short v:
+                    return processor.LdC(v);
+                case ushort v:
+                    return processor.LdC(v);
+                case float v:
+                    return processor.LdC(v);
+                case double v:
+                    return processor.LdC(v);
+                default:
+                    throw new ArgumentException("Type mismatch!" + value.GetType().FullName);
+            }
+        }
+
+        public static ILProcessor LdToken(this ILProcessor processor, FieldReference fieldReference) => processor.Add(Instruction.Create(OpCodes.Ldtoken, fieldReference));
         public static ILProcessor LdObj(this ILProcessor processor, TypeReference typeReference) => processor.Add(Instruction.Create(OpCodes.Ldobj, typeReference));
         public static ILProcessor LdLoc(this ILProcessor processor, int index)
         {
@@ -117,6 +161,7 @@ namespace UniEnumExtension
             return processor.Add(Instruction.Create(index <= 255 ? OpCodes.Ldloc_S : OpCodes.Ldloc, processor.Body.Variables[index]));
         }
 
+        public static ILProcessor LdNull(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Ldnull));
         public static ILProcessor LdStr(this ILProcessor processor, string value) => processor.Add(Instruction.Create(OpCodes.Ldstr, value));
 
         public static ILProcessor LdArg(this ILProcessor processor, int index)
@@ -136,6 +181,7 @@ namespace UniEnumExtension
             }
         }
 
+        public static ILProcessor StLoc(this ILProcessor processor, VariableDefinition variableDefinition) => processor.StLoc(processor.Body.Variables.IndexOf(variableDefinition));
         public static ILProcessor StLoc(this ILProcessor processor, int index)
         {
             switch (index)
@@ -157,11 +203,19 @@ namespace UniEnumExtension
         public static ILProcessor Switch<T>(this ILProcessor processor, Instruction[] instructions) => processor.AddRange(InstructionUtility.Switch<T>(instructions));
         public static ILProcessor Br(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Br, instruction));
         public static ILProcessor BrTrueS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Brtrue_S, instruction));
+        public static ILProcessor BeqS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Beq_S, instruction));
         public static ILProcessor BneS(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bne_Un_S, instruction));
+        public static ILProcessor Bne(this ILProcessor processor, Instruction instruction) => processor.Add(Instruction.Create(OpCodes.Bne_Un, instruction));
         public static ILProcessor Bgt<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.Bgt<T>(instruction));
+        public static ILProcessor Bge<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.Bge<T>(instruction));
+        public static ILProcessor BgeS<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.BgeS<T>(instruction));
         public static ILProcessor Blt<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.Blt<T>(instruction));
+        public static ILProcessor BleS<T>(this ILProcessor processor, Instruction instruction) => processor.Add(InstructionUtility.BleS<T>(instruction));
 
         public static ILProcessor Call(this ILProcessor processor, MethodReference methodReference) => processor.Add(Instruction.Create(OpCodes.Call, methodReference));
+        public static ILProcessor CallVirtual(this ILProcessor processor, MethodReference methodReference) => processor.Add(Instruction.Create(OpCodes.Callvirt, methodReference));
+
+        public static ILProcessor NewArr(this ILProcessor processor, TypeReference elementTypeReference) => processor.Add(Instruction.Create(OpCodes.Newarr, elementTypeReference));
 
         public static ILProcessor Ret(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Ret));
     }

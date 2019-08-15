@@ -85,7 +85,7 @@ namespace UniEnumExtension
             string name;
             do
             {
-                name = Prefix + Guid.NewGuid();
+                name = Prefix + "EnumType_" + enumTypeDefinition.FullName;
             } while (type.Fields.Any(x => x.Name == name));
             answer = new FieldDefinition(name, FieldAttributes.Assembly | FieldAttributes.Static | FieldAttributes.InitOnly | FieldAttributes.HasFieldRVA, type)
             {
@@ -185,9 +185,9 @@ namespace UniEnumExtension
 
         private static Instruction[] InitializeArrayInstructions(ModuleDefinition moduleDefinition, TypeDefinition enumTypeDefinition, ModuleDefinition systemModuleDefinition, int count)
         {
-            var privateImplementationDetails = GetOrCreatePrivateImplementationDetails(moduleDefinition, systemModuleDefinition);
+            var privateImplementationDetails = moduleDefinition.GetOrCreatePrivateImplementationDetails(systemModuleDefinition);
             var dataFieldDefinition = moduleDefinition.GetOrCreateEnumValues(privateImplementationDetails, systemModuleDefinition, enumTypeDefinition);
-            var initializeArrayMethodDefinition = systemModuleDefinition.GetType("System.Runtime.CompilerServices", "RuntimeHelpers").Methods.Single(x => x.Name == "InitializeArray");
+            var initializeArrayMethodDefinition = systemModuleDefinition.GetRuntimeHelpers_InitializeArray();
             return new[]
             {
                 InstructionUtility.LoadConstant(count),
@@ -200,8 +200,7 @@ namespace UniEnumExtension
 
         public static Instruction[] ArrayEmptyInstructions(this ModuleDefinition moduleDefinition, TypeDefinition enumTypeDefinition, ModuleDefinition systemModuleDefinition)
         {
-            var arrayTypeDefinition = systemModuleDefinition.GetType("System", "Array");
-            var arrayEmptyMethod = new GenericInstanceMethod(moduleDefinition.ImportReference(arrayTypeDefinition.Methods.First(x => x.Name == "Empty")))
+            var arrayEmptyMethod = new GenericInstanceMethod(moduleDefinition.ImportReference(systemModuleDefinition.GetArray_Empty()))
             {
                 GenericArguments = { moduleDefinition.ImportReference(enumTypeDefinition) }
             };

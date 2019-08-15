@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Mono.Cecil;
 using UnityEditor;
 using UnityEngine;
@@ -10,40 +9,110 @@ namespace UniEnumExtension
 {
     public sealed class EnumExtender : IExtender
     {
-        private Dictionary<string, MethodDefinition> typeToStringDictionary;
-        private IEnumExtensionProcessor<int> processorInt32;
-        private IEnumExtensionProcessor<int> processorInt32Flags;
-        private IEnumExtensionProcessor<uint> processorUInt32;
-        private IEnumExtensionProcessor<uint> processorUInt32Flags;
-        private IEnumExtensionProcessor<long> processorInt64;
-        private IEnumExtensionProcessor<long> processorInt64Flags;
-        private IEnumExtensionProcessor<ulong> processorUInt64;
-        private IEnumExtensionProcessor<ulong> processorUInt64Flags;
-        private IEnumExtensionProcessor<short> processorInt16;
-        private IEnumExtensionProcessor<short> processorInt16Flags;
-        private IEnumExtensionProcessor<ushort> processorUInt16;
-        private IEnumExtensionProcessor<ushort> processorUInt16Flags;
-        private IEnumExtensionProcessor<byte> processorByte;
-        private IEnumExtensionProcessor<byte> processorByteFlags;
-        private IEnumExtensionProcessor<sbyte> processorSByte;
-        private IEnumExtensionProcessor<sbyte> processorSByteFlags;
-        private IEnumsReplacer enumsReplacer;
-        private ModuleDefinition systemModuleDefinition;
-        private Dictionary<string, (ModuleDefinition module, Stream stream)> nameToModuleDefinitionDictionary;
-        private DefaultAssemblyResolver assemblyResolver;
-        private readonly string searchDirectory;
+        private readonly ModuleDefinition systemModuleDefinition;
+        private readonly Dictionary<string, (ModuleDefinition module, Stream stream)> nameToModuleDefinitionDictionary;
+        private readonly DefaultAssemblyResolver assemblyResolver;
 
-        public EnumExtender(string searchDirectory = null)
+
+        // ReSharper disable once PrivateFieldCanBeConvertedToLocalVariable
+        private readonly IModuleProcessor[][] moduleProcessors;
+        private readonly ITypeProcessor[][] typeProcessors;
+        private readonly IMethodProcessor[][] methodProcessors;
+
+        public EnumExtender(string searchDirectory = null, bool isLittleEndian = true)
+            : this(
+                Array.Empty<IModuleProcessor>(),
+                new ITypeProcessor[]
+                {
+                    new EnumIsDefinedTypeProcessorString(isLittleEndian),
+                    new EnumIsDefinedTypeProcessorNumberGeneric(),
+                    new EnumGetValuesTypeProcessor(),
+                    new EnumExtensionProcessorGeneric<byte>(),
+                    new EnumExtensionProcessorGeneric<sbyte>(),
+                    new EnumExtensionProcessorGeneric<short>(),
+                    new EnumExtensionProcessorGeneric<ushort>(),
+                    new EnumExtensionProcessorGeneric<int>(),
+                    new EnumExtensionProcessorGeneric<uint>(),
+                    new EnumExtensionProcessorGeneric<long>(),
+                    new EnumExtensionProcessorGeneric<ulong>(),
+                    new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<byte>(),
+                    new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<sbyte>(),
+                    new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<short>(),
+                    new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<ushort>(),
+                    new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<int>(),
+                    new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<uint>(),
+                    new EnumExtensionProcessorFlags64BitSizeGeneric<long>(),
+                    new EnumExtensionProcessorFlags64BitSizeGeneric<ulong>(),
+                },
+                new IMethodProcessor[] { },
+                searchDirectory)
         {
-            this.searchDirectory = searchDirectory ?? "";
+        }
+
+        public EnumExtender(IModuleProcessor[] moduleProcessorCollection, ITypeProcessor[] typeProcessorCollection, IMethodProcessor[] methodProcessorCollection, string searchDirectory)
+        {
+            assemblyResolver = new DefaultAssemblyResolver();
+            if (!(searchDirectory is null))
+            {
+                assemblyResolver.AddSearchDirectory(searchDirectory);
+            }
+            systemModuleDefinition = GetSystemModule();
+            nameToModuleDefinitionDictionary = new Dictionary<string, (ModuleDefinition, Stream)>();
+
+            const int count = 256;
+            moduleProcessors = new IModuleProcessor[count][];
+            typeProcessors = new ITypeProcessor[count][];
+            methodProcessors = new IMethodProcessor[count][];
+
+            for (var i = 0; i < count; i++)
+            {
+                moduleProcessors[i] = Array.Empty<IModuleProcessor>();
+                typeProcessors[i] = Array.Empty<ITypeProcessor>();
+                methodProcessors[i] = Array.Empty<IMethodProcessor>();
+            }
+
+            foreach (var processor in moduleProcessorCollection)
+            {
+                ref var processorReference = ref moduleProcessors[processor.Stage];
+                Array.Resize(ref processorReference, processorReference.Length + 1);
+                processorReference[processorReference.Length - 1] = processor;
+            }
+
+            foreach (var processor in typeProcessorCollection)
+            {
+                ref var processorReference = ref typeProcessors[processor.Stage];
+                Array.Resize(ref processorReference, processorReference.Length + 1);
+                processorReference[processorReference.Length - 1] = processor;
+            }
+
+            foreach (var processor in methodProcessorCollection)
+            {
+                ref var processorReference = ref methodProcessors[processor.Stage];
+                Array.Resize(ref processorReference, processorReference.Length + 1);
+                processorReference[processorReference.Length - 1] = processor;
+            }
         }
 
         public void Extend(IEnumerable<string> assemblyPaths)
         {
-            InitializeFields(assemblyPaths);
+            InitializeModules(assemblyPaths);
             foreach (var nameAndModule in nameToModuleDefinitionDictionary)
             {
                 ProcessEachAssembly(nameAndModule.Value.module);
+            }
+        }
+
+        private void ProcessEachAssembly(ModuleDefinition module)
+        {
+            var types = module.Types;
+            for (var j = 0; j < 256; j++)
+            {
+                var methodProcessorArray = methodProcessors[j];
+                var typeProcessorArray = typeProcessors[j];
+                for (var i = types.Count - 1; i >= 0; i--)
+                {
+                    Process(types[i], typeProcessorArray, methodProcessorArray);
+                }
             }
         }
 
@@ -56,56 +125,7 @@ namespace UniEnumExtension
                 module.Dispose();
                 stream.Dispose();
             }
-            typeToStringDictionary = null;
-            processorByte = processorByteFlags = null;
-            processorSByte = processorSByteFlags = null;
-            processorInt16 = processorInt16Flags = null;
-            processorUInt16 = processorUInt16Flags = null;
-            processorInt32 = processorInt32Flags = null;
-            processorUInt32 = processorUInt32Flags = null;
-            processorInt64 = processorInt64Flags = null;
-            processorUInt64 = processorUInt64Flags = null;
-            nameToModuleDefinitionDictionary = null;
             systemModuleDefinition.Dispose();
-            systemModuleDefinition = null;
-        }
-
-        private void InitializeFields(IEnumerable<string> assemblyPaths)
-        {
-            assemblyResolver = new DefaultAssemblyResolver();
-            if (searchDirectory != "")
-            {
-                assemblyResolver.AddSearchDirectory(searchDirectory);
-            }
-            systemModuleDefinition = GetSystemModule();
-            nameToModuleDefinitionDictionary = new Dictionary<string, (ModuleDefinition, Stream)>();
-            InitializeModules(assemblyPaths);
-            enumsReplacer = new EnumsReplacer(new IMethodVisitor[]
-            {
-                new GetValuesVisitor(),
-                new HasFlagVisitor(),
-                new IsDefinedVisitor(), 
-
-                // Don't need to implement because System.Enum.GetNames is fast enough!
-                // new GetNamesVisitor(),
-            });
-            InitializeDictionary();
-            processorSByte = new EnumExtensionProcessorGeneric<sbyte>(typeToStringDictionary);
-            processorInt16 = new EnumExtensionProcessorGeneric<short>(typeToStringDictionary);
-            processorInt32 = new EnumExtensionProcessorGeneric<int>(typeToStringDictionary);
-            processorInt64 = new EnumExtensionProcessorGeneric<long>(typeToStringDictionary);
-            processorByte = new EnumExtensionProcessorGeneric<byte>(typeToStringDictionary);
-            processorUInt16 = new EnumExtensionProcessorGeneric<ushort>(typeToStringDictionary);
-            processorUInt32 = new EnumExtensionProcessorGeneric<uint>(typeToStringDictionary);
-            processorUInt64 = new EnumExtensionProcessorGeneric<ulong>(typeToStringDictionary);
-            processorInt32Flags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<int>(typeToStringDictionary);
-            processorUInt32Flags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<uint>(typeToStringDictionary);
-            processorInt16Flags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<short>(typeToStringDictionary);
-            processorUInt16Flags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<ushort>(typeToStringDictionary);
-            processorSByteFlags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<sbyte>(typeToStringDictionary);
-            processorByteFlags = new EnumExtensionProcessorFlags32BitOrLessSizeGeneric<byte>(typeToStringDictionary);
-            processorUInt64Flags = new EnumExtensionProcessorFlags64BitSizeGeneric<ulong>(typeToStringDictionary);
-            processorInt64Flags = new EnumExtensionProcessorFlags64BitSizeGeneric<long>(typeToStringDictionary);
         }
 
         private void InitializeModules(IEnumerable<string> assemblyPaths)
@@ -119,7 +139,7 @@ namespace UniEnumExtension
                     {
                         AssemblyResolver = assemblyResolver,
                     });
-                    this.nameToModuleDefinitionDictionary.Add(module.Assembly.Name.FullName, (module, stream));
+                    nameToModuleDefinitionDictionary.Add(module.Assembly.Name.FullName, (module, stream));
                 }
                 catch (FileNotFoundException)
                 {
@@ -132,132 +152,41 @@ namespace UniEnumExtension
             }
         }
 
-        private void InitializeDictionary()
+        private void Process(TypeDefinition typeDefinition, ITypeProcessor[] typeProcessorArray, IMethodProcessor[] methodProcessorArray)
         {
-            void AddMethodDefinitionToDictionary(string name)
-            {
-                typeToStringDictionary.Add(name, GetToStringMethodDefinition(systemModuleDefinition, name));
-            }
-
-            typeToStringDictionary = new Dictionary<string, MethodDefinition>(8);
-            AddMethodDefinitionToDictionary("Byte");
-            AddMethodDefinitionToDictionary("SByte");
-            AddMethodDefinitionToDictionary("Int16");
-            AddMethodDefinitionToDictionary("UInt16");
-            AddMethodDefinitionToDictionary("Int32");
-            AddMethodDefinitionToDictionary("UInt32");
-            AddMethodDefinitionToDictionary("Int64");
-            AddMethodDefinitionToDictionary("UInt64");
+            ProcessType(typeDefinition, typeProcessorArray);
+            ProcessMethod(typeDefinition, methodProcessorArray);
+            ProcessNestedTypes(typeDefinition, typeProcessorArray, methodProcessorArray);
         }
 
-        private MethodDefinition GetToStringMethodDefinition(ModuleDefinition systemModule, string name)
+        private void ProcessNestedTypes(TypeDefinition typeDefinition, ITypeProcessor[] typeProcessorArray, IMethodProcessor[] methodProcessorArray)
         {
-            return systemModule.GetType("System", name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString");
-        }
-
-        private void ProcessEachAssembly(ModuleDefinition module)
-        {
-            enumsReplacer.Replace(module, systemModuleDefinition);
-            foreach (var typeDefinition in module.Types)
+            if (!typeDefinition.HasNestedTypes) return;
+            var types = typeDefinition.NestedTypes;
+            for (var i = types.Count - 1; i >= 0; i--)
             {
-                if (typeDefinition.IsEnum)
-                    ProcessEachEnumType(typeDefinition);
-                else if (typeDefinition.HasNestedTypes)
-                    ProcessNestedTypes(typeDefinition);
+                Process(types[i], typeProcessorArray, methodProcessorArray);
             }
         }
 
-        private void ProcessNestedTypes(TypeDefinition typeDefinition)
+        private void ProcessMethod(TypeDefinition typeDefinition, IMethodProcessor[] methodProcessorArray)
         {
-            foreach (var typeDefinitionNestedType in typeDefinition.NestedTypes)
+            var methods = typeDefinition.Methods;
+            for (var j = methods.Count - 1; j >= 0; j--)
             {
-                if (typeDefinitionNestedType.IsEnum)
+                var methodDefinition = methods[j];
+                for (var index = methodProcessorArray.Length - 1; index >= 0; index--)
                 {
-                    ProcessEachEnumType(typeDefinitionNestedType);
-                }
-                else if (typeDefinitionNestedType.HasNestedTypes)
-                {
-                    ProcessNestedTypes(typeDefinitionNestedType);
+                    methodProcessorArray[index].Process(systemModuleDefinition, methodDefinition);
                 }
             }
         }
 
-        private void ProcessEachEnumType(TypeDefinition enumTypeDefinition)
+        private void ProcessType(TypeDefinition typeDefinition, ITypeProcessor[] typeProcessorArray)
         {
-            var valueFieldDefinition = enumTypeDefinition.Fields.Single(x => !x.IsStatic);
-            if (enumTypeDefinition.HasCustomAttributes && enumTypeDefinition.CustomAttributes.Any(x => x.AttributeType.FullName == "System.FlagsAttribute"))
+            for (var index = typeProcessorArray.Length - 1; index >= 0; index--)
             {
-                switch (valueFieldDefinition.FieldType.Name)
-                {
-                    case "Byte":
-                        processorByteFlags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                        processorByteFlags.ProcessAddIEquatable(enumTypeDefinition);
-                        break;
-                    case "SByte":
-                        processorSByteFlags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                        processorSByteFlags.ProcessAddIEquatable(enumTypeDefinition);
-                        break;
-                    case "UInt16":
-                        processorUInt16Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                        processorUInt16Flags.ProcessAddIEquatable(enumTypeDefinition);
-                        break;
-                    case "UInt32":
-                        processorUInt32Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                        processorUInt32Flags.ProcessAddIEquatable(enumTypeDefinition);
-                        break;
-                    case "UInt64":
-                        processorUInt64Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                        processorUInt64Flags.ProcessAddIEquatable(enumTypeDefinition);
-                        break;
-                    case "Int16":
-                        processorInt16Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                        processorInt16Flags.ProcessAddIEquatable(enumTypeDefinition);
-                        break;
-                    case "Int32":
-                        processorInt32Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                        processorInt32Flags.ProcessAddIEquatable(enumTypeDefinition);
-                        break;
-                    case "Int64":
-                        processorInt64Flags.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                        processorInt64Flags.ProcessAddIEquatable(enumTypeDefinition);
-                        break;
-                }
-                return;
-            }
-            switch (valueFieldDefinition.FieldType.Name)
-            {
-                case "Byte":
-                    processorByte.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                    processorByte.ProcessAddIEquatable(enumTypeDefinition);
-                    break;
-                case "SByte":
-                    processorSByte.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                    processorSByte.ProcessAddIEquatable(enumTypeDefinition);
-                    break;
-                case "UInt16":
-                    processorUInt16.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                    processorUInt16.ProcessAddIEquatable(enumTypeDefinition);
-                    break;
-                case "UInt32":
-                    processorUInt32.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                    processorUInt32.ProcessAddIEquatable(enumTypeDefinition);
-                    break;
-                case "UInt64":
-                    processorUInt64.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                    processorUInt64.ProcessAddIEquatable(enumTypeDefinition);
-                    break;
-                case "Int16":
-                    processorInt16.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                    processorInt16.ProcessAddIEquatable(enumTypeDefinition);
-                    break;
-                case "Int32":
-                    processorInt32.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                    processorInt32.ProcessAddIEquatable(enumTypeDefinition);
-                    break;
-                case "Int64":
-                    processorInt64.ProcessRewriteToString(enumTypeDefinition, valueFieldDefinition);
-                    processorInt64.ProcessAddIEquatable(enumTypeDefinition);
-                    break;
+                typeProcessorArray[index].Process(systemModuleDefinition, typeDefinition);
             }
         }
 

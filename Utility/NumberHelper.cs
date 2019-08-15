@@ -120,6 +120,44 @@ namespace UniEnumExtension
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);
         }
 
+        public static bool DifferenceEqualsTo<T>(T min, T max, int difference)
+            where T : unmanaged
+        {
+            if (typeof(T) == typeof(byte))
+            {
+                return *(byte*)&max - *(byte*)&min == difference;
+            }
+            if (typeof(T) == typeof(sbyte))
+            {
+                return *(sbyte*)&max - *(sbyte*)&min == difference;
+            }
+            if (typeof(T) == typeof(short))
+            {
+                return *(short*)&max - *(short*)&min == difference;
+            }
+            if (typeof(T) == typeof(ushort))
+            {
+                return *(ushort*)&max - *(ushort*)&min == difference;
+            }
+            if (typeof(T) == typeof(int))
+            {
+                return *(int*)&max - *(int*)&min == difference;
+            }
+            if (typeof(T) == typeof(uint))
+            {
+                return *(uint*)&max - *(uint*)&min == difference;
+            }
+            if (typeof(T) == typeof(long))
+            {
+                return *(long*)&max - *(long*)&min == difference;
+            }
+            if (typeof(T) == typeof(ulong))
+            {
+                return *(ulong*)&max - *(ulong*)&min == (ulong)difference;
+            }
+            throw new ArgumentException("Type mismatch!" + typeof(T).Name);
+        }
+
         public static T Increment<T>(T value)
             where T : unmanaged
         {
@@ -161,6 +199,52 @@ namespace UniEnumExtension
             if (typeof(T) == typeof(ulong))
             {
                 var v = *(ulong*)&value + 1UL;
+                return *(T*)&v;
+            }
+            throw new ArgumentException("Type mismatch!" + typeof(T).Name);
+        }
+
+        public static T Decrement<T>(T value)
+            where T : unmanaged
+        {
+            if (typeof(T) == typeof(byte))
+            {
+                var v = (byte)(*(byte*)&value - 1);
+                return *(T*)&v;
+            }
+            if (typeof(T) == typeof(sbyte))
+            {
+                var v = (sbyte)(*(sbyte*)&value - 1);
+                return *(T*)&v;
+            }
+            if (typeof(T) == typeof(short))
+            {
+                var v = (short)(*(short*)&value - 1);
+                return *(T*)&v;
+            }
+            if (typeof(T) == typeof(ushort))
+            {
+                var v = (ushort)(*(ushort*)&value - 1);
+                return *(T*)&v;
+            }
+            if (typeof(T) == typeof(int))
+            {
+                var v = *(int*)&value - 1;
+                return *(T*)&v;
+            }
+            if (typeof(T) == typeof(uint))
+            {
+                var v = *(uint*)&value - 1u;
+                return *(T*)&v;
+            }
+            if (typeof(T) == typeof(long))
+            {
+                var v = *(long*)&value - 1L;
+                return *(T*)&v;
+            }
+            if (typeof(T) == typeof(ulong))
+            {
+                var v = *(ulong*)&value - 1UL;
                 return *(T*)&v;
             }
             throw new ArgumentException("Type mismatch!" + typeof(T).Name);

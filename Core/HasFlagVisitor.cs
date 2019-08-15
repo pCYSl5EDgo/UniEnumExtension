@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 namespace UniEnumExtension
 {
-    public sealed class HasFlagVisitor : IMethodVisitor
+    public sealed class HasFlagVisitor
     {
         public OpCode TargetOpCode => OpCodes.Box;
         public int Order => 96;

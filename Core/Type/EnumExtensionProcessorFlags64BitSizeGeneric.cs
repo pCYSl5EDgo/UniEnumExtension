@@ -7,30 +7,21 @@ using Mono.Cecil.Cil;
 namespace UniEnumExtension
 {
     public sealed unsafe class EnumExtensionProcessorFlags64BitSizeGeneric<T>
-        : IEnumExtensionProcessor<T>
+        : ITypeProcessor
         where T : unmanaged, IComparable<T>, IEquatable<T>
     {
-        private readonly Dictionary<string, MethodDefinition> typeToStringDictionary;
+        private readonly string fullName;
 
-        public EnumExtensionProcessorFlags64BitSizeGeneric(Dictionary<string, MethodDefinition> typeToStringDictionary)
+        public EnumExtensionProcessorFlags64BitSizeGeneric()
         {
-            this.typeToStringDictionary = typeToStringDictionary;
-        }
-        public void ProcessRewriteToString(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition)
-        {
-            AddToString(enumTypeDefinition, valueFieldDefinition);
+            fullName = typeof(T).FullName;
         }
 
-        public void ProcessAddIEquatable(TypeDefinition enumTypeDefinition)
-        {
-            enumTypeDefinition.Methods.Add(EnumExtensionUtility.MakeIEquatable(enumTypeDefinition, typeToStringDictionary["Int32"].Module));
-        }
-
-        private void AddToString(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition)
+        public void ProcessRewriteToString(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition)
         {
             var dictionary = EnumExtensionUtility.ToDictionary<T>(enumTypeDefinition, valueFieldDefinition, out var minFieldDefinition, out _, out var minValue, out _);
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
-            var baseToStringMethodDefinition = typeToStringDictionary[valueFieldDefinition.FieldType.Name];
+            var baseToStringMethodDefinition = systemModuleDefinition.GetType("System", valueFieldDefinition.FieldType.Name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString");
             bool shouldImplement;
             switch (dictionary.Count)
             {
@@ -50,6 +41,11 @@ namespace UniEnumExtension
             {
                 enumTypeDefinition.Methods.Add(method);
             }
+        }
+
+        public void ProcessAddIEquatable(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
+        {
+            enumTypeDefinition.Methods.Add(EnumExtensionUtility.MakeIEquatable(enumTypeDefinition, systemModuleDefinition));
         }
 
         private static void ProcessRoutine(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodDefinition baseToStringMethodDefinition, (string name, ulong value)[] sortedArray)
@@ -148,6 +144,26 @@ namespace UniEnumExtension
             }
             ProcessRoutine(method, valueFieldDefinition, baseToStringMethodDefinition, sortedArray);
             return true;
+        }
+
+        public byte Stage => (byte)(65 + sizeof(T));
+        public void Process(ModuleDefinition systemModuleDefinition, TypeDefinition typeDefinition)
+        {
+            if (!typeDefinition.IsEnum)
+            {
+                return;
+            }
+            if (!typeDefinition.HasCustomAttributes || typeDefinition.CustomAttributes.All(customAttribute => customAttribute.AttributeType.FullName != "System.FlagsAttribute"))
+            {
+                return;
+            }
+            var valueFieldDefinition = typeDefinition.Fields[0];
+            if (valueFieldDefinition.FieldType.FullName != fullName)
+            {
+                return;
+            }
+            ProcessRewriteToString(systemModuleDefinition, typeDefinition, valueFieldDefinition);
+            ProcessAddIEquatable(systemModuleDefinition, typeDefinition);
         }
     }
 }

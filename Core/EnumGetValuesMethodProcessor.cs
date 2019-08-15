@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 namespace UniEnumExtension
 {
-    public sealed class GetValuesVisitor : IMethodVisitor
+    public sealed class EnumGetValuesMethodProcessor
     {
         public OpCode TargetOpCode => OpCodes.Ldtoken;
         public int Order => 32;
