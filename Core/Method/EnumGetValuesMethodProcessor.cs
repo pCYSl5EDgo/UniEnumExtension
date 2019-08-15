@@ -1,6 +1,5 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
-using UnityEngine;
 
 namespace UniEnumExtension
 {
@@ -10,7 +9,7 @@ namespace UniEnumExtension
         public void Process(ModuleDefinition systemModuleDefinition, MethodDefinition methodDefinition)
         {
             var moduleDefinition = methodDefinition.Module;
-            ILProcessor processor = methodDefinition.Body.GetILProcessor();
+            var processor = methodDefinition.Body.GetILProcessor();
             var instructions = methodDefinition.Body.Instructions;
             for (var index = instructions.Count - 1; index >= 0; index--)
             {

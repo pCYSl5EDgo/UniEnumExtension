@@ -46,6 +46,7 @@ namespace UniEnumExtension
                 new IMethodProcessor[]
                 {
                     new EnumGetValuesMethodProcessor(),
+                    new EnumHasFlagMethodProcessor(),
                 },
                 searchDirectory)
         {
