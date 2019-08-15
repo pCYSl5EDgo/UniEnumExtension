@@ -26,7 +26,6 @@ namespace UniEnumExtension
                 {
                     new EnumIsDefinedTypeProcessorString(isLittleEndian),
                     new EnumIsDefinedTypeProcessorNumberGeneric(),
-                    new EnumGetValuesTypeProcessor(),
                     new EnumExtensionProcessorGeneric<byte>(),
                     new EnumExtensionProcessorGeneric<sbyte>(),
                     new EnumExtensionProcessorGeneric<short>(),
@@ -44,7 +43,10 @@ namespace UniEnumExtension
                     new EnumExtensionProcessorFlags64BitSizeGeneric<long>(),
                     new EnumExtensionProcessorFlags64BitSizeGeneric<ulong>(),
                 },
-                new IMethodProcessor[] { },
+                new IMethodProcessor[]
+                {
+                    new EnumGetValuesMethodProcessor(),
+                },
                 searchDirectory)
         {
         }
@@ -175,6 +177,7 @@ namespace UniEnumExtension
             for (var j = methods.Count - 1; j >= 0; j--)
             {
                 var methodDefinition = methods[j];
+                if (!methodDefinition.HasBody) continue;
                 for (var index = methodProcessorArray.Length - 1; index >= 0; index--)
                 {
                     methodProcessorArray[index].Process(systemModuleDefinition, methodDefinition);

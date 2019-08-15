@@ -18,22 +18,22 @@ namespace UniEnumExtension
 
         public void ProcessRewriteToString(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition)
         {
-            MethodDefinition baseToStringMethodDefinition = systemModuleDefinition.GetType("System", valueFieldDefinition.FieldType.Name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString");
+            var toStringMethodReference = enumTypeDefinition.Module.ImportReference(systemModuleDefinition.GetType("System", valueFieldDefinition.FieldType.Name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString"));
             var dictionary = EnumExtensionUtility.ToDictionary<T>(enumTypeDefinition, valueFieldDefinition, out var minFieldDefinition, out var maxFieldDefinition, out var minValue, out var maxValue);
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
             switch (dictionary.Count)
             {
                 case 0:
-                    EnumExtensionUtility.ProcessCount0(method, valueFieldDefinition, baseToStringMethodDefinition);
+                    EnumExtensionUtility.ProcessCount0(method, valueFieldDefinition, toStringMethodReference);
                     break;
                 case 1:
-                    EnumExtensionUtility.ProcessCount1(method, valueFieldDefinition, baseToStringMethodDefinition, minFieldDefinition, minValue);
+                    EnumExtensionUtility.ProcessCount1(method, valueFieldDefinition, toStringMethodReference, minFieldDefinition, minValue);
                     break;
                 case 2:
-                    EnumExtensionUtility.ProcessCount2(method, valueFieldDefinition, baseToStringMethodDefinition, minFieldDefinition, maxFieldDefinition, minValue, maxValue);
+                    EnumExtensionUtility.ProcessCount2(method, valueFieldDefinition, toStringMethodReference, minFieldDefinition, maxFieldDefinition, minValue, maxValue);
                     break;
                 default:
-                    EnumExtensionUtility.ProcessCountGreaterThan2(method, valueFieldDefinition, baseToStringMethodDefinition, new SortedList<T, FieldDefinition>(dictionary).Select(pair => (pair.Value.Name, pair.Key)).ToArray());
+                    EnumExtensionUtility.ProcessCountGreaterThan2(method, valueFieldDefinition, toStringMethodReference, new SortedList<T, FieldDefinition>(dictionary).Select(pair => (pair.Value.Name, pair.Key)).ToArray());
                     break;
             }
             enumTypeDefinition.Methods.Add(method);

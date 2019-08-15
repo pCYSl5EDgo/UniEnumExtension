@@ -21,19 +21,20 @@ namespace UniEnumExtension
         {
             var dictionary = EnumExtensionUtility.ToDictionary<T>(enumTypeDefinition, valueFieldDefinition, out var minFieldDefinition, out _, out var minValue, out _);
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
-            var baseToStringMethodDefinition = systemModuleDefinition.GetType("System", valueFieldDefinition.FieldType.Name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString");
+            var baseToStringMethodReference = enumTypeDefinition.Module.ImportReference(systemModuleDefinition.GetType("System", valueFieldDefinition.FieldType.Name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString"));
+            var enumToStringMethodReference = enumTypeDefinition.Module.ImportReference(systemModuleDefinition.GetType("System", "Enum").Methods.Single(x => x.Name == "ToString" && !x.HasParameters));
             bool shouldImplement;
             switch (dictionary.Count)
             {
                 case 0:
-                    shouldImplement = EnumExtensionUtility.ProcessCount0(method, valueFieldDefinition, baseToStringMethodDefinition);
+                    shouldImplement = EnumExtensionUtility.ProcessCount0(method, valueFieldDefinition, baseToStringMethodReference);
                     break;
                 case 1:
-                    shouldImplement = EnumExtensionUtility.ProcessCount1(method, valueFieldDefinition, baseToStringMethodDefinition, minFieldDefinition, minValue);
+                    shouldImplement = EnumExtensionUtility.ProcessCount1(method, valueFieldDefinition, baseToStringMethodReference, minFieldDefinition, minValue);
                     break;
                 default:
                     if (typeof(T) == typeof(long) || typeof(T) == typeof(ulong))
-                        shouldImplement = ProcessGreaterThanOrEqualsTo2(method, valueFieldDefinition, baseToStringMethodDefinition, dictionary);
+                        shouldImplement = ProcessGreaterThanOrEqualsTo2(method, valueFieldDefinition, baseToStringMethodReference, enumToStringMethodReference, dictionary);
                     else throw new ArgumentException("Type Mismatch! " + typeof(T).Name);
                     break;
             }
@@ -48,7 +49,7 @@ namespace UniEnumExtension
             enumTypeDefinition.Methods.Add(EnumExtensionUtility.MakeIEquatable(enumTypeDefinition, systemModuleDefinition));
         }
 
-        private static void ProcessRoutine(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodDefinition baseToStringMethodDefinition, (string name, ulong value)[] sortedArray)
+        private static void ProcessRoutine(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodReference toStringMethodReference, (string name, ulong value)[] sortedArray)
         {
             var processor = method.Body.GetILProcessor();
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
@@ -66,7 +67,7 @@ namespace UniEnumExtension
 
             processor
                 .Add(elseRoutineFirst)
-                .Call(valueFieldDefinition.Module.ImportReference(baseToStringMethodDefinition))
+                .Call(toStringMethodReference)
                 .Ret();
         }
 
@@ -83,12 +84,22 @@ namespace UniEnumExtension
             return sortedList;
         }
 
-        private static (string name, ulong value)[] PrepareAllFlags(SortedList<ulong, string> sortedList, string zeroName = null)
+        private static (string name, ulong value)[] PrepareAllFlags(SortedList<ulong, string> sortedList, out bool all, string zeroName = null)
         {
             var dst = new List<(string name, ulong value)>(sortedList.Select(pair => (pair.Value, pair.Key)));
             var sortedListKeys = sortedList.Keys.ToArray();
             var sortedListValues = sortedList.Values.ToArray();
-            for (int i0 = sortedList.Count, count = sortedList.Count, loopCount = (8 * sizeof(T) < sortedListKeys.Length ? 8 * sizeof(T) : sortedListKeys.Length) - 1; --i0 >= 0;)
+            var loopMax = 128 / sortedListKeys.Length;
+            all = sortedListKeys.Length <= loopMax;
+            if (all)
+            {
+                for (int i0 = sortedList.Count, count = sortedList.Count, loopCount = (8 * sizeof(T) < sortedListKeys.Length ? 8 * sizeof(T) : sortedListKeys.Length) - 1; --i0 >= 0;)
+                    Loop(i0, sortedListKeys[i0], sortedListValues[i0], loopCount, count, sortedListKeys, sortedListValues, dst);
+                if (zeroName != null)
+                    dst.Insert(0, (zeroName, default));
+                return dst.ToArray();
+            }
+            for (int i0 = sortedList.Count, count = sortedList.Count, loopCount = (8 * sizeof(T) < loopMax ? 8 * sizeof(T) : loopMax) - 1; --i0 >= 0;)
                 Loop(i0, sortedListKeys[i0], sortedListValues[i0], loopCount, count, sortedListKeys, sortedListValues, dst);
             if (zeroName != null)
                 dst.Insert(0, (zeroName, default));
@@ -127,22 +138,23 @@ namespace UniEnumExtension
         }
 
 
-        private bool ProcessGreaterThanOrEqualsTo2(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodDefinition baseToStringMethodDefinition, Dictionary<T, FieldDefinition> dictionary)
+        private bool ProcessGreaterThanOrEqualsTo2(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodReference baseToStringMethodReference, MethodReference enumToStringMethodReference, Dictionary<T, FieldDefinition> dictionary)
         {
             var sortedList = InitializeSortedList(dictionary);
 
             (string name, ulong value)[] sortedArray;
+            bool all;
             if (sortedList.ContainsKey(0))
             {
                 var zeroName = sortedList[0];
                 sortedList.RemoveAt(0);
-                sortedArray = PrepareAllFlags(sortedList, zeroName);
+                sortedArray = PrepareAllFlags(sortedList, out all, zeroName);
             }
             else
             {
-                sortedArray = PrepareAllFlags(sortedList);
+                sortedArray = PrepareAllFlags(sortedList, out all);
             }
-            ProcessRoutine(method, valueFieldDefinition, baseToStringMethodDefinition, sortedArray);
+            ProcessRoutine(method, valueFieldDefinition, all ? baseToStringMethodReference : enumToStringMethodReference, sortedArray);
             return true;
         }
 

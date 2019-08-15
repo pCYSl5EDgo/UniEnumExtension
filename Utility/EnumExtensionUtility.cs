@@ -70,16 +70,16 @@ namespace UniEnumExtension
                 AggressiveInlining = true,
             };
 
-        public static bool ProcessCount0(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition)
+        public static bool ProcessCount0(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodReference toStringMethodReference)
         {
             methodToString.Body.GetILProcessor()
                 .LdArg(0)
-                .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
+                .Call(toStringMethodReference)
                 .Ret();
             return true;
         }
 
-        public static bool ProcessCount1<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition, FieldDefinition minFieldDefinition, T minValue) where T : unmanaged, IComparable<T>
+        public static bool ProcessCount1<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodReference toStringMethodDefinition, FieldDefinition minFieldDefinition, T minValue) where T : unmanaged, IComparable<T>
         {
             var processor = methodToString.Body.GetILProcessor();
             var defaultIl = Instruction.Create(OpCodes.Ldarg_0);
@@ -100,12 +100,12 @@ namespace UniEnumExtension
                 .LdStr(minFieldDefinition.Name)
                 .Ret()
                 .Add(defaultIl)
-                .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
+                .Call(toStringMethodDefinition)
                 .Ret();
             return true;
         }
 
-        public static void ProcessCount2<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodDefinition toStringMethodDefinition, FieldDefinition minFieldDefinition, FieldDefinition maxFieldDefinition, T minValue, T maxValue) where T : unmanaged, IComparable<T>
+        public static void ProcessCount2<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodReference toStringMethodReference, FieldDefinition minFieldDefinition, FieldDefinition maxFieldDefinition, T minValue, T maxValue) where T : unmanaged, IComparable<T>
         {
             var processor = methodToString.Body.GetILProcessor();
             var defaultIl = Instruction.Create(OpCodes.Ldarg_0);
@@ -138,11 +138,11 @@ namespace UniEnumExtension
             }
             processor
                 .Add(defaultIl)
-                .Call(valueFieldDefinition.Module.ImportReference(toStringMethodDefinition))
+                .Call(toStringMethodReference)
                 .Ret();
         }
 
-        public static void ProcessCountGreaterThan2<T>(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodDefinition baseToStringMethodDefinition, (string name, T value)[] sortedArray)
+        public static void ProcessCountGreaterThan2<T>(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodReference baseToStringMethodReference, (string name, T value)[] sortedArray)
             where T : unmanaged, IComparable<T>, IEquatable<T>
         {
             var processor = method.Body.GetILProcessor();
@@ -163,7 +163,7 @@ namespace UniEnumExtension
             }
             processor
                 .Add(elseRoutineFirst)
-                .Call(valueFieldDefinition.Module.ImportReference(baseToStringMethodDefinition))
+                .Call(baseToStringMethodReference)
                 .Ret();
         }
 

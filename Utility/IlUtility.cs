@@ -75,6 +75,7 @@ namespace UniEnumExtension
         }
 
         public static ILProcessor ConvUnsigned(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Conv_U));
+        public static ILProcessor ConvIntPtr(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Conv_I));
 
         public static ILProcessor Ceq(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Ceq));
         public static ILProcessor LdC0Ceq(this ILProcessor processor) => processor.Add(Instruction.Create(OpCodes.Ldc_I4_0)).Add(Instruction.Create(OpCodes.Ceq));

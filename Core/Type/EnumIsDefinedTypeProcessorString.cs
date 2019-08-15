@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using UnityEngine;
 
 namespace UniEnumExtension
 {
@@ -96,34 +95,71 @@ namespace UniEnumExtension
             var systemRuntimeHelpersGetOffsetMethodReference = module.ImportReference(systemModuleDefinition.GetType("System.Runtime.CompilerServices", "RuntimeHelpers").Methods.First(x => x.Name == "get_OffsetToStringData"));
             if (tuples.Length == 1)
             {
-                var ifSameLength = Instruction.Create(OpCodes.Ret);
+                method.Body.Variables.Add(new VariableDefinition(new PointerType(module.TypeSystem.Char)));
+                var enumerable = ProcessTrees(NameTree.Create(tuples[0].names, 0, tuples[0].Length, isLittleEndian), out _);
+                var ifSameLength = Instruction.Create(OpCodes.Ldarg_0);
                 processor
                     .LdC(tuples[0].Length)
                     .BeqS(ifSameLength)
                     .LdC(false)
                     .Ret()
-                    .Add(ifSameLength);
+                    .Add(ifSameLength)
+                    .ConvIntPtr()
+                    .Call(systemRuntimeHelpersGetOffsetMethodReference)
+                    .Add()
+                    .StLoc(0)
+                    .AddRange(enumerable);
                 return;
             }
-            if (tuples[tuples.Length - 1].Length - tuples[0].Length == tuples.Length - 1)
+            var length = tuples[tuples.Length - 1].Length - tuples[0].Length + 1;
+            if (length == tuples.Length)
             {
-                Instruction[] switchInstructions = new Instruction[tuples.Length];
-                processor
-                    .Sub(tuples[0].Length)
-                    .Switch<int>(switchInstructions)
-                    .LdC(false)
-                    .Ret();
-                var shouldBePinned = false;
-                for (var i = 0; i < tuples.Length; i++)
-                {
-                    processor.AddRange(MakeEachLengthInstructions(tuples[i].names, systemStringEqualsMethodReference, systemRuntimeHelpersGetOffsetMethodReference, out switchInstructions[i], out var pinned));
-                    shouldBePinned |= pinned;
-                }
-                if (!shouldBePinned) return;
-                var variableDefinitions = method.Body.Variables;
-                variableDefinitions.Add(new VariableDefinition(new PointerType(module.TypeSystem.Char)));
-                variableDefinitions.Add(new VariableDefinition(new PinnedType(module.TypeSystem.String)));
+                Continuous(module, processor, systemStringEqualsMethodReference, method, tuples, systemRuntimeHelpersGetOffsetMethodReference);
             }
+            Discontinuous(module, processor, systemStringEqualsMethodReference, method, tuples, systemRuntimeHelpersGetOffsetMethodReference, length);
+        }
+
+        private void Discontinuous(ModuleDefinition module, ILProcessor processor, MethodReference systemStringEqualsMethodReference, MethodDefinition method, (int Length, string[] names)[] tuples, MethodReference systemRuntimeHelpersGetOffsetMethodReference, int length)
+        {
+            var switchInstructions = new Instruction[length];
+            var fail = Instruction.Create(OpCodes.Ldc_I4_0);
+            for (var i = 0; i < switchInstructions.Length; i++)
+            {
+                switchInstructions[i] = fail;
+            }
+            processor
+                .Sub(tuples[0].Length)
+                .Switch<int>(switchInstructions)
+                .Add(fail)
+                .Ret();
+            var shouldBePinned = false;
+            for (var i = 0; i < tuples.Length; i++)
+            {
+                processor.AddRange(MakeEachLengthInstructions(tuples[i].names, systemStringEqualsMethodReference, systemRuntimeHelpersGetOffsetMethodReference, out switchInstructions[tuples[i].Length - tuples[0].Length], out var pinned));
+                shouldBePinned |= pinned;
+            }
+            if (!shouldBePinned) return;
+            var variableDefinitions = method.Body.Variables;
+            variableDefinitions.Add(new VariableDefinition(new PointerType(module.TypeSystem.Char)));
+        }
+
+        private void Continuous(ModuleDefinition module, ILProcessor processor, MethodReference systemStringEqualsMethodReference, MethodDefinition method, (int Length, string[] names)[] tuples, MethodReference systemRuntimeHelpersGetOffsetMethodReference)
+        {
+            var switchInstructions = new Instruction[tuples.Length];
+            processor
+                .Sub(tuples[0].Length)
+                .Switch<int>(switchInstructions)
+                .LdC(false)
+                .Ret();
+            var shouldBePinned = false;
+            for (var i = 0; i < tuples.Length; i++)
+            {
+                processor.AddRange(MakeEachLengthInstructions(tuples[i].names, systemStringEqualsMethodReference, systemRuntimeHelpersGetOffsetMethodReference, out switchInstructions[i], out var pinned));
+                shouldBePinned |= pinned;
+            }
+            if (!shouldBePinned) return;
+            var variableDefinitions = method.Body.Variables;
+            variableDefinitions.Add(new VariableDefinition(new PointerType(module.TypeSystem.Char)));
         }
 
         private IEnumerable<Instruction> MakeEachLengthInstructions(string[] names, MethodReference systemStringEqualsMethodReference, MethodReference systemRuntimeHelpersGetOffsetMethodReference, out Instruction firstInstruction, out bool needPin)
@@ -173,9 +209,7 @@ namespace UniEnumExtension
                     IEnumerable<Instruction> instructions = new[]
                     {
                         firstInstruction,
-                        Instruction.Create(OpCodes.Stloc_1),
-                        Instruction.Create(OpCodes.Ldloc_1),
-                        Instruction.Create(OpCodes.Conv_U),
+                        Instruction.Create(OpCodes.Conv_I),
                         Instruction.Create(OpCodes.Call, systemRuntimeHelpersGetOffsetMethodReference),
                         Instruction.Create(OpCodes.Add),
                         Instruction.Create(OpCodes.Stloc_0),
@@ -229,8 +263,6 @@ namespace UniEnumExtension
                                     Instruction.Create(OpCodes.Bne_Un_S, fail),
                                     Instruction.Create(OpCodes.Pop),
                                     Instruction.Create(OpCodes.Ldc_I4_1),
-                                    Instruction.Create(OpCodes.Ldnull),
-                                    Instruction.Create(OpCodes.Stloc_1),
                                     Instruction.Create(OpCodes.Ret),
                                     fail,
                                     Instruction.Create(OpCodes.Blt, lessFirst),
@@ -250,8 +282,6 @@ namespace UniEnumExtension
                                     Instruction.Create(OpCodes.Bne_Un_S, fail),
                                     Instruction.Create(OpCodes.Pop),
                                     Instruction.Create(OpCodes.Ldc_I4_1),
-                                    Instruction.Create(OpCodes.Ldnull),
-                                    Instruction.Create(OpCodes.Stloc_1),
                                     Instruction.Create(OpCodes.Ret),
                                     fail,
                                     Instruction.Create(OpCodes.Blt, lessFirst),
@@ -282,8 +312,6 @@ namespace UniEnumExtension
                                     Instruction.Create(OpCodes.Bne_Un_S, notSame),
                                     Instruction.Create(OpCodes.Pop),
                                     Instruction.Create(OpCodes.Ldc_I4_1),
-                                    Instruction.Create(OpCodes.Ldnull),
-                                    Instruction.Create(OpCodes.Stloc_1),
                                     Instruction.Create(OpCodes.Ret),
                                     notSame,
                                     Instruction.Create(OpCodes.Ble_S, less),
@@ -327,8 +355,6 @@ namespace UniEnumExtension
                                     Instruction.Create(OpCodes.Bne_Un_S, fail),
                                     Instruction.Create(OpCodes.Pop),
                                     Instruction.Create(OpCodes.Ldc_I4_1),
-                                    Instruction.Create(OpCodes.Ldnull),
-                                    Instruction.Create(OpCodes.Stloc_1),
                                     Instruction.Create(OpCodes.Ret),
                                     fail,
                                     Instruction.Create(OpCodes.Blt, lessFirst),
@@ -357,13 +383,9 @@ namespace UniEnumExtension
                             Instruction.Create(OpCodes.Bne_Un_S, fail),
                             Instruction.Create(OpCodes.Pop),
                             Instruction.Create(OpCodes.Ldc_I4_0),
-                            Instruction.Create(OpCodes.Ldnull),
-                            Instruction.Create(OpCodes.Stloc_1),
                             Instruction.Create(OpCodes.Ret),
                             fail,
                             Instruction.Create(OpCodes.Ceq),
-                            Instruction.Create(OpCodes.Ldnull),
-                            Instruction.Create(OpCodes.Stloc_1),
                             Instruction.Create(OpCodes.Ret),
                         };
                     }
@@ -379,13 +401,9 @@ namespace UniEnumExtension
                             Instruction.Create(OpCodes.Bne_Un_S, fail),
                             Instruction.Create(OpCodes.Pop),
                             Instruction.Create(OpCodes.Ldc_I4_0),
-                            Instruction.Create(OpCodes.Ldnull),
-                            Instruction.Create(OpCodes.Stloc_1),
                             Instruction.Create(OpCodes.Ret),
                             fail,
                             Instruction.Create(OpCodes.Ceq),
-                            Instruction.Create(OpCodes.Ldnull),
-                            Instruction.Create(OpCodes.Stloc_1),
                             Instruction.Create(OpCodes.Ret),
                         };
                     }
@@ -407,22 +425,16 @@ namespace UniEnumExtension
                                 Instruction.Create(OpCodes.Ldind_I2),
                                 InstructionUtility.LoadConstant(nameLeaf0.CVal2),
                                 Instruction.Create(OpCodes.Ceq),
-                                Instruction.Create(OpCodes.Ldnull),
-                                Instruction.Create(OpCodes.Stloc_1),
                                 Instruction.Create(OpCodes.Ret),
                             fail,
                             Instruction.Create(OpCodes.Beq_S, success),
                                 Instruction.Create(OpCodes.Ldc_I4_0),
-                                Instruction.Create(OpCodes.Ldnull),
-                                Instruction.Create(OpCodes.Stloc_1),
                                 Instruction.Create(OpCodes.Ret),
                             success,
                             Instruction.Create(OpCodes.Ldc_I4_4),
                             Instruction.Create(OpCodes.Ldind_I2),
                             InstructionUtility.LoadConstant(nameLeaf1.CVal2),
                             Instruction.Create(OpCodes.Ceq),
-                            Instruction.Create(OpCodes.Ldnull),
-                            Instruction.Create(OpCodes.Stloc_1),
                             Instruction.Create(OpCodes.Ret),
                         };
                     }
@@ -450,13 +462,9 @@ namespace UniEnumExtension
                 Instruction.Create(OpCodes.Bne_Un_S, fail),
                 Instruction.Create(OpCodes.Pop),
                 Instruction.Create(OpCodes.Ldc_I4_0),
-                Instruction.Create(OpCodes.Ldnull),
-                Instruction.Create(OpCodes.Stloc_1),
                 Instruction.Create(OpCodes.Ret),
                 fail,
                 Instruction.Create(OpCodes.Ceq),
-                Instruction.Create(OpCodes.Ldnull),
-                Instruction.Create(OpCodes.Stloc_1),
                 Instruction.Create(OpCodes.Ret),
             };
         }
@@ -474,14 +482,10 @@ namespace UniEnumExtension
                 Instruction.Create(OpCodes.Bne_Un_S, fail),
                 Instruction.Create(OpCodes.Pop),
                 Instruction.Create(OpCodes.Ldc_I4_1),
-                Instruction.Create(OpCodes.Ldnull),
-                Instruction.Create(OpCodes.Stloc_1),
                 Instruction.Create(OpCodes.Ret),
                 fail,
                 Instruction.Create(OpCodes.Beq_S, success),
                 Instruction.Create(OpCodes.Ldc_I4_0),
-                Instruction.Create(OpCodes.Ldnull),
-                Instruction.Create(OpCodes.Stloc_1),
                 Instruction.Create(OpCodes.Ret),
                 success,
                 Instruction.Create(OpCodes.Ldc_I4_8),
@@ -506,8 +510,6 @@ namespace UniEnumExtension
                 Instruction.Create(OpCodes.Ldc_I8, nameTree1.Value.LVal0),
                 Instruction.Create(OpCodes.Beq, success1),
                 Instruction.Create(OpCodes.Ldc_I4_0),
-                Instruction.Create(OpCodes.Ldnull),
-                Instruction.Create(OpCodes.Stloc_1),
                 Instruction.Create(OpCodes.Ret),
                 success0,
                 Instruction.Create(OpCodes.Ldloc_0),
@@ -539,8 +541,6 @@ namespace UniEnumExtension
                         Instruction.Create(OpCodes.Ldind_U2),
                         InstructionUtility.LoadConstant(nameLeaf.CVal0),
                         Instruction.Create(OpCodes.Ceq),
-                        Instruction.Create(OpCodes.Ldnull),
-                        Instruction.Create(OpCodes.Stloc_1),
                         Instruction.Create(OpCodes.Ret),
                     };
                 case 2:
@@ -550,8 +550,6 @@ namespace UniEnumExtension
                         Instruction.Create(OpCodes.Ldind_U4),
                         InstructionUtility.LoadConstant(nameLeaf.IVal0),
                         Instruction.Create(OpCodes.Ceq),
-                        Instruction.Create(OpCodes.Ldnull),
-                        Instruction.Create(OpCodes.Stloc_1),
                         Instruction.Create(OpCodes.Ret),
                     };
                 case 3:
@@ -563,8 +561,6 @@ namespace UniEnumExtension
                         InstructionUtility.LoadConstant(nameLeaf.IVal0),
                         Instruction.Create(OpCodes.Beq_S, success),
                         Instruction.Create(OpCodes.Ldc_I4_0),
-                        Instruction.Create(OpCodes.Ldnull),
-                        Instruction.Create(OpCodes.Stloc_1),
                         Instruction.Create(OpCodes.Ret),
                         success,
                         Instruction.Create(OpCodes.Ldc_I4_4),
@@ -572,8 +568,6 @@ namespace UniEnumExtension
                         Instruction.Create(OpCodes.Ldind_U2),
                         InstructionUtility.LoadConstant(nameLeaf.CVal2),
                         Instruction.Create(OpCodes.Ceq),
-                        Instruction.Create(OpCodes.Ldnull),
-                        Instruction.Create(OpCodes.Stloc_1),
                         Instruction.Create(OpCodes.Ret),
                     };
                 case 4:
@@ -585,8 +579,6 @@ namespace UniEnumExtension
                             Instruction.Create(OpCodes.Ldind_I8),
                             Instruction.Create(OpCodes.Ldc_I8, nameLeaf.LVal0),
                             Instruction.Create(OpCodes.Ceq),
-                            Instruction.Create(OpCodes.Ldnull),
-                            Instruction.Create(OpCodes.Stloc_1),
                             Instruction.Create(OpCodes.Ret),
                         };
                     }
@@ -602,8 +594,6 @@ namespace UniEnumExtension
                         Instruction.Create(OpCodes.Ldc_I8, nameLeaf.LVal0),
                         Instruction.Create(OpCodes.Beq_S, successFirst),
                         Instruction.Create(OpCodes.Ldc_I4_0),
-                        Instruction.Create(OpCodes.Ldnull),
-                        Instruction.Create(OpCodes.Stloc_1),
                         Instruction.Create(OpCodes.Ret),
                     }.Concat(enumerable);
                 default: throw new ArgumentOutOfRangeException(nameLeaf.Length.ToString());
