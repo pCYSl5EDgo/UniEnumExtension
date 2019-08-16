@@ -17,7 +17,12 @@ namespace UniEnumExtension
 
         public void ProcessRewriteToString(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
         {
+            if (enumTypeDefinition.Methods.Any(x => x.Name == "ToString"))
+            {
+                return;
+            }
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
+            method.AggressiveInlining = false;
             enumTypeDefinition.Methods.Add(method);
             var moduleDefinition = enumTypeDefinition.Module;
             EnumExtensionUtility.ImplementNoFlag<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method);
@@ -25,6 +30,10 @@ namespace UniEnumExtension
 
         public void ProcessAddIEquatable(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
         {
+            if (enumTypeDefinition.Methods.Any(x => x.Name == "Equals"))
+            {
+                return;
+            }
             enumTypeDefinition.Methods.Add(EnumExtensionUtility.MakeIEquatable(enumTypeDefinition, systemModuleDefinition));
         }
 
@@ -36,12 +45,11 @@ namespace UniEnumExtension
             {
                 return;
             }
-            if (typeDefinition.HasCustomAttributes && typeDefinition.CustomAttributes.Any(customAttribute => customAttribute.AttributeType.FullName == "System.FlagsAttribute"))
+            if (typeDefinition.CustomAttributes.Any(customAttribute => customAttribute.AttributeType.FullName == "System.FlagsAttribute"))
             {
                 return;
             }
-            var valueFieldDefinition = typeDefinition.Fields[0];
-            if (valueFieldDefinition.FieldType.FullName != FullName)
+            if (typeDefinition.Fields[0].FieldType.FullName != FullName)
             {
                 return;
             }

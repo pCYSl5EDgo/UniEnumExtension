@@ -4,7 +4,7 @@ using Mono.Cecil;
 
 namespace UniEnumExtension
 {
-    public sealed unsafe class EnumExtensionProcessorFlags64BitSizeGeneric<T>
+    public sealed class EnumExtensionProcessorFlags64BitSizeGeneric<T>
         : ITypeProcessor
         where T : unmanaged, IComparable<T>, IEquatable<T>
     {
@@ -17,6 +17,10 @@ namespace UniEnumExtension
 
         public void ProcessRewriteToString(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
         {
+            if (enumTypeDefinition.Methods.Any(x => x.Name == "ToString"))
+            {
+                return;
+            }
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
             var moduleDefinition = enumTypeDefinition.Module;
             enumTypeDefinition.Methods.Add(method);
@@ -28,6 +32,10 @@ namespace UniEnumExtension
 
         public void ProcessAddIEquatable(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
         {
+            if (enumTypeDefinition.Methods.Any(x => x.Name == "Equals"))
+            {
+                return;
+            }
             enumTypeDefinition.Methods.Add(EnumExtensionUtility.MakeIEquatable(enumTypeDefinition, systemModuleDefinition));
         }
 

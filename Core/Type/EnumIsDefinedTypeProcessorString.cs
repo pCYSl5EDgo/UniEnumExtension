@@ -19,13 +19,14 @@ namespace UniEnumExtension
 
         public void Process(ModuleDefinition systemModuleDefinition, TypeDefinition typeDefinition)
         {
-            if (!typeDefinition.IsEnum)
+            const string name = "IsDefinedString";
+            if (!typeDefinition.IsEnum || typeDefinition.Methods.Any(x => x.Name == name))
             {
                 return;
             }
             var module = typeDefinition.Module;
             var parameterDefinition = new ParameterDefinition("name", ParameterAttributes.None, module.TypeSystem.String);
-            var method = new MethodDefinition("IsDefinedString", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.Static, module.TypeSystem.Boolean)
+            var method = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.Static, module.TypeSystem.Boolean)
             {
                 AggressiveInlining = true,
                 Parameters = { parameterDefinition }

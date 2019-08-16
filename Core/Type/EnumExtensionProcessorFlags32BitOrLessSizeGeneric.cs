@@ -4,7 +4,7 @@ using Mono.Cecil;
 
 namespace UniEnumExtension
 {
-    public sealed unsafe class EnumExtensionProcessorFlags32BitOrLessSizeGeneric<T>
+    public sealed class EnumExtensionProcessorFlags32BitOrLessSizeGeneric<T>
         : ITypeProcessor
         where T : unmanaged, IComparable<T>, IEquatable<T>
     {
@@ -17,7 +17,12 @@ namespace UniEnumExtension
 
         public void ProcessRewriteToString(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
         {
+            if (enumTypeDefinition.Methods.Any(x => x.Name == "ToString"))
+            {
+                return;
+            }
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
+            method.IsCompilerControlled = true;
             var moduleDefinition = enumTypeDefinition.Module;
             enumTypeDefinition.Methods.Add(method);
             if (!EnumExtensionUtility.ImplementFlags32<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method))
@@ -28,6 +33,10 @@ namespace UniEnumExtension
 
         public void ProcessAddIEquatable(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
         {
+            if (enumTypeDefinition.Methods.Any(x => x.Name == "Equals"))
+            {
+                return;
+            }
             enumTypeDefinition.Methods.Add(EnumExtensionUtility.MakeIEquatable(enumTypeDefinition, systemModuleDefinition));
         }
 
@@ -42,8 +51,7 @@ namespace UniEnumExtension
             {
                 return;
             }
-            var valueFieldDefinition = typeDefinition.Fields[0];
-            if (valueFieldDefinition.FieldType.FullName != FullName)
+            if (typeDefinition.Fields[0].FieldType.FullName != FullName)
             {
                 return;
             }
