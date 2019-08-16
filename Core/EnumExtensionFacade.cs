@@ -45,6 +45,7 @@ namespace UniEnumExtension
                 },
                 new IMethodProcessor[]
                 {
+                    new EnumToStringMethodProcessor(),
                     new EnumIsDefinedMethodProcessor(),
                     new EnumGetValuesMethodProcessor(),
                     new EnumHasFlagMethodProcessor(),

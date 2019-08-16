@@ -2,7 +2,6 @@
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using UnityEngine;
 
 namespace UniEnumExtension
 {
@@ -27,21 +26,7 @@ namespace UniEnumExtension
                 for (var index = instructions.Count - 1; index >= 0; index--)
                 {
                     var loadTokenInstruction = instructions[index];
-                    if (!IsValidLoadTokenInstanceType(loadTokenInstruction, out var enumTypeReference))
-                    {
-                        continue;
-                    }
-                    TypeDefinition enumTypeDefinition;
-                    try
-                    {
-                        enumTypeDefinition = enumTypeReference.ToDefinition();
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogWarning(e);
-                        continue;
-                    }
-                    if (!enumTypeDefinition.IsEnum)
+                    if (!IsValidLoadTokenInstanceType(loadTokenInstruction, out var enumTypeReference) || !enumTypeReference.TryToDefinition(out var enumTypeDefinition) || !enumTypeDefinition.IsEnum)
                     {
                         continue;
                     }

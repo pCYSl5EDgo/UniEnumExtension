@@ -1,7 +1,5 @@
-﻿using System;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
-using UnityEngine;
 
 namespace UniEnumExtension
 {
@@ -35,21 +33,7 @@ namespace UniEnumExtension
 
         private void TryProcessEachInstruction(Instruction currentInstruction, ScopedProcessor processor)
         {
-            if (!IsValidBoxInstruction(currentInstruction, out var enumTypeReference))
-            {
-                return;
-            }
-            TypeDefinition enumTypeDefinition;
-            try
-            {
-                enumTypeDefinition = enumTypeReference.ToDefinition();
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning(e);
-                return;
-            }
-            if (!enumTypeDefinition.IsEnum)
+            if (!IsValidBoxInstruction(currentInstruction, out var enumTypeReference) || !enumTypeReference.TryToDefinition(out var enumTypeDefinition) || !enumTypeDefinition.IsEnum)
             {
                 return;
             }
@@ -70,14 +54,8 @@ namespace UniEnumExtension
                     if (next2 is null) break;
                     if (next2.OpCode == OpCodes.Call && ((MethodReference)next2.Operand).FullName == "System.Boolean System.Enum::HasFlag(System.Enum)")
                     {
-                        TypeDefinition enumTypeDefinition2;
-                        try
+                        if (!(next.Operand as TypeReference).TryToDefinition(out var enumTypeDefinition2))
                         {
-                            enumTypeDefinition2 = ((TypeReference)next.Operand).ToDefinition();
-                        }
-                        catch (Exception e)
-                        {
-                            Debug.LogWarning(e);
                             break;
                         }
                         if (!enumTypeDefinition2.IsEnum || enumTypeDefinition2.FullName != enumTypeDefinition.FullName) break;

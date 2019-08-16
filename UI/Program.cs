@@ -47,7 +47,7 @@ namespace UniEnumExtension
         // ReSharper disable once InconsistentNaming
         public void OnGUI()
         {
-            bool changed = false;
+            var changed = false;
             EditorGUILayout.Space();
             EditorGUILayout.Space();
             serializedObject.Update();

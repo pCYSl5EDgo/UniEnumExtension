@@ -13,17 +13,17 @@ namespace UniEnumExtension
 
         public void Initialize()
         {
-            Assembly[] playerAssemblies = CompilationPipeline.GetAssemblies(AssembliesType.Player);
+            var playerAssemblies = CompilationPipeline.GetAssemblies(AssembliesType.Player);
             if (ShouldProcessAllAssemblies)
             {
                 Enables = new bool[playerAssemblies.Length];
-                for (int i = 0; i < Enables.Length; i++)
+                for (var i = 0; i < Enables.Length; i++)
                 {
                     Enables[i] = true;
                 }
                 Names = new string[Enables.Length];
                 OutputPaths = new string[Enables.Length];
-                for (int i = 0; i < playerAssemblies.Length; i++)
+                for (var i = 0; i < playerAssemblies.Length; i++)
                 {
                     Names[i] = playerAssemblies[i].name;
                     OutputPaths[i] = playerAssemblies[i].outputPath;

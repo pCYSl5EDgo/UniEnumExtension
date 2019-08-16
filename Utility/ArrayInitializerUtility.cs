@@ -7,13 +7,13 @@ namespace UniEnumExtension
 {
     public static class ArrayInitializerUtility
     {
-        const string Prefix = "pcysl5edgo_";
+        private const string Prefix = "pcysl5edgo_";
+        public const string PrivateImplementationTypeName = "<PrivateImplementationDetails>";
         public static TypeDefinition GetOrCreatePrivateImplementationDetails(this ModuleDefinition moduleDefinition, ModuleDefinition systemModuleDefinition)
         {
-            const string typeName = "<PrivateImplementationDetails>";
-            var answer = moduleDefinition.GetType(typeName);
+            var answer = moduleDefinition.GetType(PrivateImplementationTypeName);
             if (!(answer is null)) return answer;
-            answer = new TypeDefinition("", typeName, TypeAttributes.AutoLayout | TypeAttributes.AnsiClass | TypeAttributes.Sealed, moduleDefinition.TypeSystem.Object);
+            answer = new TypeDefinition("", PrivateImplementationTypeName, TypeAttributes.AutoLayout | TypeAttributes.AnsiClass | TypeAttributes.Sealed, moduleDefinition.TypeSystem.Object);
             var compilerGeneratedAttributeTypeDefinition = systemModuleDefinition.GetType("System.Runtime.CompilerServices", "CompilerGeneratedAttribute");
             answer.CustomAttributes.Add(new CustomAttribute(moduleDefinition.ImportReference(compilerGeneratedAttributeTypeDefinition.Methods.Single())));
             moduleDefinition.Types.Add(answer);

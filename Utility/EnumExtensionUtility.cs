@@ -6,8 +6,313 @@ using Mono.Cecil.Cil;
 
 namespace UniEnumExtension
 {
-    public static class EnumExtensionUtility
+    public static unsafe class EnumExtensionUtility
     {
+        public static bool ImplementNoFlag<T>(ModuleDefinition systemModuleDefinition, ModuleDefinition moduleDefinition, TypeDefinition enumTypeDefinition, MethodDefinition method)
+            where T : unmanaged, IComparable<T>, IEquatable<T>
+        {
+            var valueFieldDefinition = enumTypeDefinition.Fields[0];
+            var toStringMethodReference = moduleDefinition.ImportReference(systemModuleDefinition.GetType("System", valueFieldDefinition.FieldType.Name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString"));
+            var dictionary = ToDictionary<T>(enumTypeDefinition, valueFieldDefinition, out var minFieldDefinition, out var maxFieldDefinition, out var minValue, out var maxValue);
+            switch (dictionary.Count)
+            {
+                case 0:
+                    ProcessCount0(method, valueFieldDefinition, toStringMethodReference);
+                    break;
+                case 1:
+                    ProcessCount1(method, valueFieldDefinition, toStringMethodReference, minFieldDefinition, minValue);
+                    break;
+                case 2:
+                    ProcessCount2(method, valueFieldDefinition, toStringMethodReference, minFieldDefinition, maxFieldDefinition, minValue, maxValue);
+                    break;
+                default:
+                    ProcessCountGreaterThan2(method, valueFieldDefinition, toStringMethodReference, new SortedList<T, FieldDefinition>(dictionary).Select(pair => (pair.Value.Name, pair.Key)).ToArray());
+                    break;
+            }
+            return true;
+        }
+
+        private static SortedList<ulong, string> InitializeSortedList64<T>(Dictionary<T, FieldDefinition> dictionary)
+            where T : unmanaged
+        {
+            var sortedList = new SortedList<ulong, string>(dictionary.Count);
+
+            foreach (var tuple in dictionary)
+            {
+                var value = tuple.Key;
+                sortedList.Add(*(ulong*)&value, tuple.Value.Name);
+            }
+
+            return sortedList;
+        }
+
+        public static bool ImplementFlags64<T>(ModuleDefinition systemModuleDefinition, ModuleDefinition moduleDefinition, TypeDefinition enumTypeDefinition, MethodDefinition method)
+           where T : unmanaged, IComparable<T>, IEquatable<T>
+        {
+            bool shouldImplement;
+            var valueFieldDefinition = enumTypeDefinition.Fields[0];
+            var baseToStringMethodReference = moduleDefinition.ImportReference(systemModuleDefinition.GetType("System", valueFieldDefinition.FieldType.Name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString"));
+            var enumToStringMethodReference = moduleDefinition.ImportReference(systemModuleDefinition.GetType("System", "Enum").Methods.Single(x => x.Name == "ToString" && !x.HasParameters));
+            var dictionary = ToDictionary<T>(enumTypeDefinition, valueFieldDefinition, out var minFieldDefinition, out _, out var minValue, out _);
+            switch (dictionary.Count)
+            {
+                case 0:
+                    shouldImplement = ProcessCount0(method, valueFieldDefinition, baseToStringMethodReference);
+                    break;
+                case 1:
+                    shouldImplement = ProcessCount1(method, valueFieldDefinition, baseToStringMethodReference, minFieldDefinition, minValue);
+                    break;
+                default:
+                    if (typeof(T) == typeof(long) || typeof(T) == typeof(ulong))
+                        shouldImplement = ProcessGreaterThanOrEqualsTo2Flags64(method, valueFieldDefinition, baseToStringMethodReference, enumToStringMethodReference, dictionary);
+                    else throw new ArgumentException("Type Mismatch! " + typeof(T).Name);
+                    break;
+            }
+            return shouldImplement;
+        }
+
+
+        private static void ProcessRoutine64(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodReference toStringMethodReference, (string name, ulong value)[] sortedArray)
+        {
+            var processor = method.Body.GetILProcessor();
+            var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
+            processor.LdArg(0).LdObj(valueFieldDefinition.FieldType);
+            ref var minValue = ref sortedArray[0].value;
+            var actualCount = sortedArray[sortedArray.Length - 1].value - minValue + 1UL;
+            if (actualCount == (ulong)sortedArray.Length)
+            {
+                processor.ProcessContinuous(sortedArray, minValue, elseRoutineFirst);
+            }
+            else
+            {
+                processor.ProcessDiscontinuous(method, valueFieldDefinition, sortedArray, ref minValue, elseRoutineFirst);
+            }
+
+            processor
+                .Add(elseRoutineFirst)
+                .Call(toStringMethodReference)
+                .Ret();
+        }
+
+        private static (string name, ulong value)[] PrepareAllFlags64<T>(SortedList<ulong, string> sortedList, out bool all, string zeroName = null)
+            where T : unmanaged
+        {
+            var dst = new List<(string name, ulong value)>(sortedList.Select(pair => (pair.Value, pair.Key)));
+            var sortedListKeys = sortedList.Keys.ToArray();
+            var sortedListValues = sortedList.Values.ToArray();
+            var loopMax = 128 / sortedListKeys.Length;
+            all = sortedListKeys.Length <= loopMax;
+            if (all)
+            {
+                for (int i0 = sortedList.Count, count = sortedList.Count, loopCount = (8 * sizeof(T) < sortedListKeys.Length ? 8 * sizeof(T) : sortedListKeys.Length) - 1; --i0 >= 0;)
+                    Loop64(i0, sortedListKeys[i0], sortedListValues[i0], loopCount, count, sortedListKeys, sortedListValues, dst);
+                if (zeroName != null)
+                    dst.Insert(0, (zeroName, default));
+                return dst.ToArray();
+            }
+            for (int i0 = sortedList.Count, count = sortedList.Count, loopCount = (8 * sizeof(T) < loopMax ? 8 * sizeof(T) : loopMax) - 1; --i0 >= 0;)
+                Loop64(i0, sortedListKeys[i0], sortedListValues[i0], loopCount, count, sortedListKeys, sortedListValues, dst);
+            if (zeroName != null)
+                dst.Insert(0, (zeroName, default));
+            return dst.ToArray();
+        }
+
+        private sealed class PairComparer<TComparable>
+            : IComparer<(string name, TComparable value)>
+            where TComparable : unmanaged, IComparable<TComparable>, IEquatable<TComparable>
+        {
+            public static readonly PairComparer<TComparable> Default = new PairComparer<TComparable>();
+            public int Compare((string name, TComparable value) x, (string name, TComparable value) y)
+            {
+                return x.value.CompareTo(y.value);
+            }
+        }
+
+        private static void Loop64(int outerIndex, ulong outerValue, string outerName, int loopCount, int count, ulong[] sortedListValues, string[] sortedListNames, List<(string name, ulong value)> dst)
+        {
+            if (--loopCount < 0) return;
+            for (var innerIndex = count - 1; innerIndex > outerIndex; innerIndex--)
+            {
+                var innerValue = outerValue | sortedListValues[innerIndex];
+                if (dst.BinarySearch(("", innerValue), PairComparer<ulong>.Default) >= 0) continue;
+                var innerName = outerName + ", " + sortedListNames[innerIndex];
+
+                for (var i = dst.Count; --i >= 0;)
+                {
+                    if (innerValue < dst[i].value) continue;
+                    dst.Insert(i + 1, (innerName, innerValue));
+                    break;
+                }
+
+                Loop64(innerIndex, innerValue, innerName, loopCount, count, sortedListValues, sortedListNames, dst);
+            }
+        }
+
+        private static bool ProcessGreaterThanOrEqualsTo2Flags64<T>(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodReference baseToStringMethodReference, MethodReference enumToStringMethodReference, Dictionary<T, FieldDefinition> dictionary)
+            where T : unmanaged
+        {
+            var sortedList = InitializeSortedList64(dictionary);
+
+            (string name, ulong value)[] sortedArray;
+            bool all;
+            if (sortedList.ContainsKey(0))
+            {
+                var zeroName = sortedList[0];
+                sortedList.RemoveAt(0);
+                sortedArray = PrepareAllFlags64<T>(sortedList, out all, zeroName);
+            }
+            else
+            {
+                sortedArray = PrepareAllFlags64<T>(sortedList, out all);
+            }
+            ProcessRoutine64(method, valueFieldDefinition, all ? baseToStringMethodReference : enumToStringMethodReference, sortedArray);
+            return true;
+        }
+
+        public static bool ImplementFlags32<T>(ModuleDefinition systemModuleDefinition, ModuleDefinition moduleDefinition, TypeDefinition enumTypeDefinition, MethodDefinition method)
+            where T : unmanaged, IEquatable<T>, IComparable<T>
+        {
+            bool shouldImplement;
+            var valueFieldDefinition = enumTypeDefinition.Fields[0];
+            var dictionary = ToDictionary<T>(enumTypeDefinition, valueFieldDefinition, out var minFieldDefinition, out _, out var minValue, out _);
+            var toStringMethodReference = moduleDefinition.ImportReference(systemModuleDefinition.GetType("System", valueFieldDefinition.FieldType.Name).Methods.Single(x => x.IsPublic && !x.IsStatic && !x.HasParameters && x.Name == "ToString"));
+            var enumToStringMethodReference = moduleDefinition.ImportReference(systemModuleDefinition.GetType("System", "Enum").Methods.Single(x => x.Name == "ToString" && !x.HasParameters));
+            switch (dictionary.Count)
+            {
+                case 0:
+                    shouldImplement = ProcessCount0(method, valueFieldDefinition, toStringMethodReference);
+                    break;
+                case 1:
+                    shouldImplement = ProcessCount1(method, valueFieldDefinition, toStringMethodReference, minFieldDefinition, minValue);
+                    break;
+                default:
+                    if (typeof(T) == typeof(byte) || typeof(T) == typeof(sbyte) || typeof(T) == typeof(short) || typeof(T) == typeof(ushort) || typeof(T) == typeof(int) || typeof(T) == typeof(uint))
+                        shouldImplement = ProcessGreaterThanOrEqualsTo2Flags32(method, valueFieldDefinition, toStringMethodReference, enumToStringMethodReference, dictionary);
+                    else throw new ArgumentException("Type Mismatch! " + typeof(T).Name);
+                    break;
+            }
+            return shouldImplement;
+        }
+
+        private static bool ProcessGreaterThanOrEqualsTo2Flags32<T>(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodReference baseToStringMethodReference, MethodReference enumToStringMethodReference, Dictionary<T, FieldDefinition> dictionary)
+            where T : unmanaged
+        {
+            var sortedList = InitializeSortedList32(dictionary);
+
+            (string name, uint value)[] sortedArray;
+            bool all;
+            if (sortedList.ContainsKey(0))
+            {
+                var zeroName = sortedList[0];
+                sortedList.RemoveAt(0);
+                sortedArray = PrepareAllFlags32<T>(sortedList, out all, zeroName);
+            }
+            else
+            {
+                sortedArray = PrepareAllFlags32<T>(sortedList, out all);
+            }
+            ProcessRoutine32(method, valueFieldDefinition, all ? baseToStringMethodReference : enumToStringMethodReference, sortedArray);
+            return true;
+        }
+
+        private static void ProcessRoutine32(MethodDefinition method, FieldDefinition valueFieldDefinition, MethodReference toStringMethodReference, (string name, uint value)[] sortedArray)
+        {
+            var processor = method.Body.GetILProcessor();
+            var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
+            processor.LdArg(0).LdObj(valueFieldDefinition.FieldType);
+            ref var minValue = ref sortedArray[0].value;
+            var actualCount = sortedArray[sortedArray.Length - 1].value - minValue + 1;
+            if (actualCount == sortedArray.Length)
+            {
+                processor.ProcessContinuous(sortedArray, minValue, elseRoutineFirst);
+            }
+            else
+            {
+                processor.ProcessDiscontinuous(method, valueFieldDefinition, sortedArray, ref minValue, elseRoutineFirst);
+            }
+
+            processor
+                .Add(elseRoutineFirst)
+                .Call(toStringMethodReference)
+                .Ret();
+        }
+
+        private static SortedList<uint, string> InitializeSortedList32<T>(Dictionary<T, FieldDefinition> dictionary)
+            where T : unmanaged
+        {
+            var sortedList = new SortedList<uint, string>(dictionary.Count);
+            if (typeof(T) == typeof(sbyte) || typeof(T) == typeof(byte))
+            {
+                foreach (var tuple in dictionary)
+                {
+                    var value = tuple.Key;
+                    sortedList.Add(*(byte*)&value, tuple.Value.Name);
+                }
+            }
+            else if (typeof(T) == typeof(short) || typeof(T) == typeof(ushort))
+            {
+                foreach (var tuple in dictionary)
+                {
+                    var value = tuple.Key;
+                    sortedList.Add(*(ushort*)&value, tuple.Value.Name);
+                }
+            }
+            else
+            {
+                foreach (var tuple in dictionary)
+                {
+                    var value = tuple.Key;
+                    sortedList.Add(*(uint*)&value, tuple.Value.Name);
+                }
+            }
+
+            return sortedList;
+        }
+
+        private static (string name, uint value)[] PrepareAllFlags32<T>(SortedList<uint, string> sortedList, out bool all, string zeroName = null)
+            where T : unmanaged
+        {
+            var dst = new List<(string name, uint value)>(sortedList.Select(pair => (pair.Value, pair.Key)));
+            var sortedListKeys = sortedList.Keys.ToArray();
+            var sortedListValues = sortedList.Values.ToArray();
+            var loopMax = 128 / sortedListKeys.Length;
+            all = sortedListKeys.Length <= loopMax;
+            if (all)
+            {
+                for (int i0 = sortedList.Count, count = sortedList.Count, loopCount = (8 * sizeof(T) < sortedListKeys.Length ? 8 * sizeof(T) : sortedListKeys.Length) - 1; --i0 >= 0;)
+                    Loop32(i0, sortedListKeys[i0], sortedListValues[i0], loopCount, count, sortedListKeys, sortedListValues, dst);
+                if (zeroName != null)
+                    dst.Insert(0, (zeroName, default));
+                return dst.ToArray();
+            }
+            for (int i0 = sortedList.Count, count = sortedList.Count, loopCount = (8 * sizeof(T) < loopMax ? 8 * sizeof(T) : loopMax) - 1; --i0 >= 0;)
+                Loop32(i0, sortedListKeys[i0], sortedListValues[i0], loopCount, count, sortedListKeys, sortedListValues, dst);
+            if (zeroName != null)
+                dst.Insert(0, (zeroName, default));
+            return dst.ToArray();
+        }
+
+        private static void Loop32(int outerIndex, uint outerValue, string outerName, int loopCount, int count, uint[] sortedListValues, string[] sortedListNames, List<(string name, uint value)> dst)
+        {
+            if (--loopCount < 0) return;
+            for (var innerIndex = count - 1; innerIndex > outerIndex; innerIndex--)
+            {
+                var innerValue = outerValue | sortedListValues[innerIndex];
+                if (dst.BinarySearch(("", innerValue), PairComparer<uint>.Default) >= 0) continue;
+                var innerName = outerName + ", " + sortedListNames[innerIndex];
+
+                for (var i = dst.Count; --i >= 0;)
+                {
+                    if (innerValue < dst[i].value) continue;
+                    dst.Insert(i + 1, (innerName, innerValue));
+                    break;
+                }
+
+                Loop32(innerIndex, innerValue, innerName, loopCount, count, sortedListValues, sortedListNames, dst);
+            }
+        }
+
+
         public static Dictionary<T, FieldDefinition> ToDictionary<T>(TypeDefinition enumTypeDefinition, FieldDefinition valueFieldDefinition, out FieldDefinition min, out FieldDefinition max, out T minValue, out T maxValue)
             where T : IComparable<T>
         {

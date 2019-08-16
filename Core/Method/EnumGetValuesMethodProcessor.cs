@@ -1,7 +1,5 @@
-﻿using System;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
-using UnityEngine;
 
 namespace UniEnumExtension
 {
@@ -29,21 +27,7 @@ namespace UniEnumExtension
 
         private static void ProcessEachInstruction(ModuleDefinition systemModuleDefinition, Instruction loadTokenInstruction, ScopedProcessor processor, ModuleDefinition moduleDefinition)
         {
-            if (!IsValidLoadTokenInstruction(loadTokenInstruction, out var enumTypeReference))
-            {
-                return;
-            }
-            TypeDefinition enumTypeDefinition;
-            try
-            {
-                enumTypeDefinition = enumTypeReference.ToDefinition();
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning(e);
-                return;
-            }
-            if (!enumTypeDefinition.IsEnum)
+            if (!IsValidLoadTokenInstruction(loadTokenInstruction, out var enumTypeReference) || !enumTypeReference.TryToDefinition(out var enumTypeDefinition) || !enumTypeDefinition.IsEnum)
             {
                 return;
             }
