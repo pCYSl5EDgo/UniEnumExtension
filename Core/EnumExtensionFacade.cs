@@ -19,7 +19,7 @@ namespace UniEnumExtension
         private readonly ITypeProcessor[][] typeProcessors;
         private readonly IMethodProcessor[][] methodProcessors;
 
-        public EnumExtender(string searchDirectory = null, bool isLittleEndian = true)
+        public EnumExtender(string[] searchDirectory, bool isLittleEndian = true)
             : this(
                 Array.Empty<IModuleProcessor>(),
                 new ITypeProcessor[]
@@ -45,6 +45,7 @@ namespace UniEnumExtension
                 },
                 new IMethodProcessor[]
                 {
+                    new EnumIsDefinedMethodProcessor(),
                     new EnumGetValuesMethodProcessor(),
                     new EnumHasFlagMethodProcessor(),
                 },
@@ -52,10 +53,10 @@ namespace UniEnumExtension
         {
         }
 
-        public EnumExtender(IModuleProcessor[] moduleProcessorCollection, ITypeProcessor[] typeProcessorCollection, IMethodProcessor[] methodProcessorCollection, string searchDirectory)
+        public EnumExtender(IModuleProcessor[] moduleProcessorCollection, ITypeProcessor[] typeProcessorCollection, IMethodProcessor[] methodProcessorCollection, string[] searchDirectories)
         {
             assemblyResolver = new DefaultAssemblyResolver();
-            if (!(searchDirectory is null))
+            foreach (var searchDirectory in searchDirectories)
             {
                 assemblyResolver.AddSearchDirectory(searchDirectory);
             }
@@ -129,6 +130,7 @@ namespace UniEnumExtension
                 stream.Dispose();
             }
             systemModuleDefinition.Dispose();
+            assemblyResolver.Dispose();
         }
 
         private void InitializeModules(IEnumerable<string> assemblyPaths)

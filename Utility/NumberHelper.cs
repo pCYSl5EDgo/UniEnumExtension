@@ -4,6 +4,34 @@ namespace UniEnumExtension
 {
     public static unsafe class NumberHelper
     {
+        public static bool IsInt32OnStack(this string name)
+        {
+            switch (name)
+            {
+                default:
+                    return false;
+                case "Byte":
+                case "SByte":
+                case "Int16":
+                case "UInt16":
+                case "Int32":
+                case "UInt32":
+                    return true;
+            }
+        }
+
+        public static bool IsInt64OnStack(this string name)
+        {
+            switch (name)
+            {
+                default:
+                    return false;
+                case "Int64":
+                case "UInt64":
+                    return true;
+            }
+        }
+
         public static bool EqualsZero<T>(T value)
             where T : unmanaged
         {

@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 // ReSharper disable UnusedMember.Local
@@ -37,7 +38,7 @@ namespace UniEnumExtension
             if (guidArray.Length == 0) return;
             var programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
             var assemblyPaths = programStatus.OutputPaths.Where((_, index) => programStatus.Enables[index]);
-            using (var extender = new EnumExtender())
+            using (var extender = new EnumExtender(searchDirectory: new[] { Path.GetDirectoryName(UnityEditorInternal.InternalEditorUtility.GetEngineCoreModuleAssemblyPath()) }))
             {
                 extender.Extend(assemblyPaths);
             }
