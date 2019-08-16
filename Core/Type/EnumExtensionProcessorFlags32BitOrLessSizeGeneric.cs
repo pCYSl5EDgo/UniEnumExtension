@@ -22,7 +22,6 @@ namespace UniEnumExtension
                 return;
             }
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
-            method.IsCompilerControlled = true;
             var moduleDefinition = enumTypeDefinition.Module;
             enumTypeDefinition.Methods.Add(method);
             if (!EnumExtensionUtility.ImplementFlags32<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method))

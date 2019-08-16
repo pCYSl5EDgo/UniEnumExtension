@@ -22,7 +22,6 @@ namespace UniEnumExtension
                 return;
             }
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
-            method.AggressiveInlining = false;
             enumTypeDefinition.Methods.Add(method);
             var moduleDefinition = enumTypeDefinition.Module;
             EnumExtensionUtility.ImplementNoFlag<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method);
