@@ -177,13 +177,18 @@ namespace UniEnumExtension
         private void ProcessMethod(TypeDefinition typeDefinition, IMethodProcessor[] methodProcessorArray)
         {
             var methods = typeDefinition.Methods;
-            for (var j = methods.Count - 1; j >= 0; j--)
+            for (var index = methodProcessorArray.Length - 1; index >= 0; index--)
             {
-                var methodDefinition = methods[j];
-                if (!methodDefinition.HasBody) continue;
-                for (var index = methodProcessorArray.Length - 1; index >= 0; index--)
+                var processor = methodProcessorArray[index];
+                if (!processor.ShouldProcess(typeDefinition))
                 {
-                    methodProcessorArray[index].Process(systemModuleDefinition, methodDefinition);
+                    continue;
+                }
+                for (var j = methods.Count - 1; j >= 0; j--)
+                {
+                    var methodDefinition = methods[j];
+                    if (!methodDefinition.HasBody) continue;
+                    processor.Process(systemModuleDefinition, methodDefinition);
                 }
             }
         }
