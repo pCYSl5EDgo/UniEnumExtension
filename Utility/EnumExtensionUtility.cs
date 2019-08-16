@@ -17,7 +17,7 @@ namespace UniEnumExtension
             switch (dictionary.Count)
             {
                 case 0:
-                    ProcessCount0(method, valueFieldDefinition, toStringMethodReference);
+                    ProcessCount0(method, toStringMethodReference);
                     break;
                 case 1:
                     ProcessCount1(method, valueFieldDefinition, toStringMethodReference, minFieldDefinition, minValue);
@@ -57,7 +57,7 @@ namespace UniEnumExtension
             switch (dictionary.Count)
             {
                 case 0:
-                    shouldImplement = ProcessCount0(method, valueFieldDefinition, baseToStringMethodReference);
+                    shouldImplement = ProcessCount0(method, baseToStringMethodReference);
                     break;
                 case 1:
                     shouldImplement = ProcessCount1(method, valueFieldDefinition, baseToStringMethodReference, minFieldDefinition, minValue);
@@ -76,7 +76,8 @@ namespace UniEnumExtension
         {
             var processor = method.Body.GetILProcessor();
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
-            processor.LdArg(0).LdObj(valueFieldDefinition.FieldType);
+            var moduleDefinition = method.Module;
+            processor.LdArg(0).LdObj(moduleDefinition.ImportReference(valueFieldDefinition.FieldType));
             ref var minValue = ref sortedArray[0].value;
             var actualCount = sortedArray[sortedArray.Length - 1].value - minValue + 1UL;
             if (actualCount == (ulong)sortedArray.Length)
@@ -180,7 +181,7 @@ namespace UniEnumExtension
             switch (dictionary.Count)
             {
                 case 0:
-                    shouldImplement = ProcessCount0(method, valueFieldDefinition, toStringMethodReference);
+                    shouldImplement = ProcessCount0(method, toStringMethodReference);
                     break;
                 case 1:
                     shouldImplement = ProcessCount1(method, valueFieldDefinition, toStringMethodReference, minFieldDefinition, minValue);
@@ -219,7 +220,8 @@ namespace UniEnumExtension
         {
             var processor = method.Body.GetILProcessor();
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
-            processor.LdArg(0).LdObj(valueFieldDefinition.FieldType);
+            var moduleDefinition = method.Module;
+            processor.LdArg(0).LdObj(moduleDefinition.ImportReference(valueFieldDefinition.FieldType));
             ref var minValue = ref sortedArray[0].value;
             var actualCount = sortedArray[sortedArray.Length - 1].value - minValue + 1;
             if (actualCount == sortedArray.Length)
@@ -350,9 +352,9 @@ namespace UniEnumExtension
         public static MethodDefinition MakeIEquatable(TypeDefinition enumTypeDefinition, ModuleDefinition systemModule)
         {
             var interfaceIEquatable = systemModule.GetType("System", "IEquatable`1");
-            var mainModule = enumTypeDefinition.Module;
-            enumTypeDefinition.Interfaces.Add(new InterfaceImplementation(new GenericInstanceType(mainModule.ImportReference(interfaceIEquatable)) { GenericArguments = { enumTypeDefinition } }));
-            var equals = new MethodDefinition("Equals", MethodAttributes.Final | MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.NewSlot | MethodAttributes.HideBySig, mainModule.TypeSystem.Boolean)
+            var moduleDefinition = enumTypeDefinition.Module;
+            enumTypeDefinition.Interfaces.Add(new InterfaceImplementation(new GenericInstanceType(moduleDefinition.ImportReference(interfaceIEquatable)) { GenericArguments = { enumTypeDefinition } }));
+            var equals = new MethodDefinition("Equals", MethodAttributes.Final | MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.NewSlot | MethodAttributes.HideBySig, moduleDefinition.TypeSystem.Boolean)
             {
                 Parameters = { new ParameterDefinition(enumTypeDefinition) },
                 AggressiveInlining = true,
@@ -375,7 +377,7 @@ namespace UniEnumExtension
                 AggressiveInlining = true,
             };
 
-        public static bool ProcessCount0(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodReference toStringMethodReference)
+        public static bool ProcessCount0(MethodDefinition methodToString, MethodReference toStringMethodReference)
         {
             methodToString.Body.GetILProcessor()
                 .LdArg(0)
@@ -386,50 +388,75 @@ namespace UniEnumExtension
 
         public static bool ProcessCount1<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodReference toStringMethodDefinition, FieldDefinition minFieldDefinition, T minValue) where T : unmanaged, IComparable<T>
         {
+            var moduleDefinition = methodToString.Module;
             var processor = methodToString.Body.GetILProcessor();
-            var defaultIl = Instruction.Create(OpCodes.Ldarg_0);
+            var notSame = Instruction.Create(OpCodes.Ldarg_0);
             processor
                 .LdArg(0);
             if (NumberHelper.EqualsZero(minValue))
             {
-                processor.BrTrueS(defaultIl);
+                processor.BrTrueS(notSame);
             }
             else
             {
                 processor
-                    .LdObj(valueFieldDefinition.FieldType)
+                    .LdObj(moduleDefinition.ImportReference(moduleDefinition.ImportReference(valueFieldDefinition.FieldType)))
                     .LdC(minValue)
-                    .Add(Instruction.Create(OpCodes.Bne_Un_S, defaultIl));
+                    .Add(Instruction.Create(OpCodes.Bne_Un_S, notSame));
             }
             processor
                 .LdStr(minFieldDefinition.Name)
                 .Ret()
-                .Add(defaultIl)
+                .Add(notSame)
                 .Call(toStringMethodDefinition)
                 .Ret();
             return true;
         }
 
-        public static void ProcessCount2<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodReference toStringMethodReference, FieldDefinition minFieldDefinition, FieldDefinition maxFieldDefinition, T minValue, T maxValue) where T : unmanaged, IComparable<T>
+        public static void ProcessCount2<T>(MethodDefinition methodToString, FieldDefinition valueFieldDefinition, MethodReference toStringMethodReference, FieldDefinition minFieldDefinition, FieldDefinition maxFieldDefinition, T minValue, T maxValue)
+            where T : unmanaged, IComparable<T>
         {
+            var moduleDefinition = methodToString.Module;
             var processor = methodToString.Body.GetILProcessor();
-            var defaultIl = Instruction.Create(OpCodes.Ldarg_0);
+            var notSame = Instruction.Create(OpCodes.Ldarg_0);
             if (NumberHelper.EqualsZero(minValue))
             {
                 var shortJump = InstructionUtility.LoadConstantGeneric(maxValue);
-                processor.LdArg(0).LdObj(valueFieldDefinition.FieldType).Dup().BrTrueS(shortJump[0]).Pop().LdStr(minFieldDefinition.Name).Ret().AddRange(shortJump).BneS(defaultIl).LdStr(maxFieldDefinition.Name).Ret();
+                processor
+                    .LdArg(0)
+                    .LdObj(moduleDefinition.ImportReference(valueFieldDefinition.FieldType))
+                    .Dup()
+                    .BrTrueS(shortJump[0])
+                    .Pop()
+                    .LdStr(minFieldDefinition.Name)
+                    .Ret()
+                    .AddRange(shortJump)
+                    .BneS(notSame)
+                    .LdStr(maxFieldDefinition.Name)
+                    .Ret();
             }
             else if (NumberHelper.EqualsZero(maxValue))
             {
                 var shortJump = InstructionUtility.LoadConstantGeneric(minValue);
-                processor.LdArg(0).LdObj(valueFieldDefinition.FieldType).Dup().BrTrueS(shortJump[0]).Pop().LdStr(maxFieldDefinition.Name).Ret().AddRange(shortJump).BneS(defaultIl).LdStr(minFieldDefinition.Name).Ret();
+                processor
+                    .LdArg(0)
+                    .LdObj(moduleDefinition.ImportReference(valueFieldDefinition.FieldType))
+                    .Dup()
+                    .BrTrueS(shortJump[0])
+                    .Pop()
+                    .LdStr(maxFieldDefinition.Name)
+                    .Ret()
+                    .AddRange(shortJump)
+                    .BneS(notSame)
+                    .LdStr(minFieldDefinition.Name)
+                    .Ret();
             }
             else
             {
                 var shortJump = InstructionUtility.LoadConstantGeneric(maxValue);
                 processor
                     .LdArg(0)
-                    .LdObj(valueFieldDefinition.FieldType)
+                    .LdObj(moduleDefinition.ImportReference(valueFieldDefinition.FieldType))
                     .Dup()
                     .LdC(minValue)
                     .BneS(shortJump[0])
@@ -437,12 +464,12 @@ namespace UniEnumExtension
                     .LdStr(minFieldDefinition.Name)
                     .Ret()
                     .AddRange(shortJump)
-                    .BneS(defaultIl)
+                    .BneS(notSame)
                     .LdStr(maxFieldDefinition.Name)
                     .Ret();
             }
             processor
-                .Add(defaultIl)
+                .Add(notSame)
                 .Call(toStringMethodReference)
                 .Ret();
         }
@@ -451,8 +478,9 @@ namespace UniEnumExtension
             where T : unmanaged, IComparable<T>, IEquatable<T>
         {
             var processor = method.Body.GetILProcessor();
+            var moduleDefinition = method.Module;
             var elseRoutineFirst = Instruction.Create(OpCodes.Ldarg_0);
-            processor.LdArg(0).LdObj(valueFieldDefinition.FieldType);
+            processor.LdArg(0).LdObj(moduleDefinition.ImportReference(valueFieldDefinition.FieldType));
             ref var minValue = ref sortedArray[0].value;
             if (IsContinuous(sortedArray))
             {
@@ -497,7 +525,8 @@ namespace UniEnumExtension
         public static void ProcessDiscontinuous<T>(this ILProcessor processor, MethodDefinition method, FieldDefinition valueFieldDefinition, (string name, T value)[] sortedArray, ref T minValue, Instruction elseRoutineFirst)
             where T : unmanaged, IComparable<T>
         {
-            var variableDefinition = new VariableDefinition(valueFieldDefinition.FieldType);
+            var moduleDefinition = method.Module;
+            var variableDefinition = new VariableDefinition(moduleDefinition.ImportReference(valueFieldDefinition.FieldType));
             method.Body.Variables.Add(variableDefinition);
 
             processor

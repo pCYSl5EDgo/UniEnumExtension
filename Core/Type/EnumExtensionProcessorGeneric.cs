@@ -18,9 +18,9 @@ namespace UniEnumExtension
         public void ProcessRewriteToString(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)
         {
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
+            enumTypeDefinition.Methods.Add(method);
             var moduleDefinition = enumTypeDefinition.Module;
             EnumExtensionUtility.ImplementNoFlag<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method);
-            enumTypeDefinition.Methods.Add(method);
         }
 
         public void ProcessAddIEquatable(ModuleDefinition systemModuleDefinition, TypeDefinition enumTypeDefinition)

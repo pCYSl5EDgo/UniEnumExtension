@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
 
 namespace UniEnumExtension
 {
@@ -21,9 +19,10 @@ namespace UniEnumExtension
         {
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
             var moduleDefinition = enumTypeDefinition.Module;
-            if (EnumExtensionUtility.ImplementFlags32<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method))
+            enumTypeDefinition.Methods.Add(method);
+            if (!EnumExtensionUtility.ImplementFlags32<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method))
             {
-                enumTypeDefinition.Methods.Add(method);
+                enumTypeDefinition.Methods.Remove(method);
             }
         }
 

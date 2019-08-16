@@ -19,9 +19,10 @@ namespace UniEnumExtension
         {
             var method = EnumExtensionUtility.MakeToString(enumTypeDefinition);
             var moduleDefinition = enumTypeDefinition.Module;
-            if (EnumExtensionUtility.ImplementFlags64<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method))
+            enumTypeDefinition.Methods.Add(method);
+            if (!EnumExtensionUtility.ImplementFlags64<T>(systemModuleDefinition, moduleDefinition, enumTypeDefinition, method))
             {
-                enumTypeDefinition.Methods.Add(method);
+                enumTypeDefinition.Methods.Remove(method);
             }
         }
 

@@ -130,7 +130,7 @@ namespace UniEnumExtension
                             .Replace(loadTokenInstruction, enumsGetValuesInstructions[0])
                             .Replace(getTypeFromHandleInstruction, enumsGetValuesInstructions[1])
                             .Replace(getValuesInstruction, enumsGetValuesInstructions[2]);
-                        for (var i = 4; i < enumsGetValuesInstructions.Length; i++)
+                        for (var i = 3; i < enumsGetValuesInstructions.Length; i++)
                         {
                             processor.InsertAfter(enumsGetValuesInstructions[i - 1], enumsGetValuesInstructions[i]);
                         }
