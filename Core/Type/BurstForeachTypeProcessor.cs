@@ -1,7 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using Mono.Collections.Generic;
 using UnityEngine;
 
 namespace UniEnumExtension
@@ -34,7 +35,7 @@ namespace UniEnumExtension
             using (ScopedProcessor processor = body.GetILProcessor())
             {
                 var exceptionHandlerTree = ExceptionHandlerTree.Create(body);
-                Debug.Log(exceptionHandlerTree);
+                Debug.Log("count : " + body.ExceptionHandlers.Count + exceptionHandlerTree);
                 ProcessComplexTree(processor, exceptionHandlerTree);
             }
             handlers.Clear();
@@ -46,126 +47,82 @@ namespace UniEnumExtension
             {
                 ProcessComplexTree(processor, tree);
             }
-            if (!(exceptionHandlerTree.Handler is null))
+            if (exceptionHandlerTree.Handler is null)
             {
-                ProcessSimpleTree(processor, exceptionHandlerTree);
+                return;
             }
+            ProcessSimpleTree(processor, exceptionHandlerTree);
         }
 
         private static void ProcessSimpleTree(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree)
         {
+            ProcessHandler(processor, exceptionHandlerTree);
+            ProcessTry(processor, exceptionHandlerTree);
+        }
+
+        private static void ProcessHandler(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree)
+        {
+            var variables = processor.Processor.Body.Variables;
+
+            Instruction iterator = exceptionHandlerTree.Handler.HandlerStart;
+            for (var end = exceptionHandlerTree.Handler.HandlerEnd; iterator != end; iterator = iterator.Next)
+            {
+                if (iterator.OpCode.Code == Code.Endfinally)
+                    break;
+            }
+            
+            if (iterator is null)
+            {
+                Debug.Log("FMEOINONOAJN");
+                return;
+            }
+        }
+
+        private static void ProcessTry(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree)
+        {
             var handler = exceptionHandlerTree.Handler;
             var variables = processor.Processor.Body.Variables;
-            for (Instruction iterator = handler.TryStart, end = handler.TryEnd; !(iterator is null) && !ReferenceEquals(iterator, end); iterator = iterator.Next)
+            for (Instruction iterator = handler.TryStart, end = handler.TryEnd; !(iterator is null) && !ReferenceEquals(iterator, end);)
             {
-                if (iterator.OpCode != OpCodes.Leave_S && iterator.OpCode != OpCodes.Leave) continue;
-                var destination = (Instruction)iterator.Operand;
-                if (ReferenceEquals(destination, iterator.Next))
+                if (iterator.OpCode != OpCodes.Leave_S && iterator.OpCode != OpCodes.Leave)
                 {
-                    var tmp = iterator.Previous;
-                    processor.Remove(iterator);
-                    iterator = tmp;
+                    iterator = iterator.Next;
                     continue;
                 }
-                var (constant, variableIndex) = exceptionHandlerTree.FindIndex(destination);
-                var brHandler = Instruction.Create(OpCodes.Br, handler.HandlerStart);
-                if (variableIndex == -1)
-                {
-                    processor.Replace(iterator, brHandler);
-                    iterator = brHandler;
-                    continue;
-                }
-                var ldConstant = InstructionUtility.LoadConstant(constant);
-                var stTarget = variables.StoreLocal(variableIndex);
+                iterator = ProcessLeave(processor, exceptionHandlerTree, iterator, variables, handler);
+            }
+        }
+
+        private static Instruction ProcessLeave(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree, Instruction iterator, Collection<VariableDefinition> variables, ExceptionHandler handler)
+        {
+            var destination = (Instruction)iterator.Operand;
+
+            var (switchIndex, tree) = exceptionHandlerTree.FindIndex(destination);
+
+            var br = Instruction.Create(OpCodes.Br, exceptionHandlerTree.Handler.HandlerStart);
+            if (ReferenceEquals(tree, exceptionHandlerTree.Parent))
+            {
+                var ldc = InstructionUtility.LoadConstant(switchIndex);
+                var stLoc = variables.StoreLocal(tree.VariableIndex);
                 processor
-                    .Replace(iterator, ldConstant)
-                    .InsertAfter(ldConstant, stTarget);
-                iterator = stTarget;
-                if (variableIndex != exceptionHandlerTree.VariableIndex)
+                    .Replace(iterator, br)
+                    .InsertBefore(br, stLoc)
+                    .InsertBefore(stLoc, ldc);
+            }
+            else
+            {
+                processor.Replace(iterator, br);
+                for (var itr = exceptionHandlerTree; !ReferenceEquals(itr, tree); itr = itr.Parent)
                 {
-                    var minus = InstructionUtility.LoadConstant(-1);
-                    var stCurrent = variables.StoreLocal(exceptionHandlerTree.VariableIndex);
                     processor
-                        .InsertAfter(stTarget, minus)
-                        .InsertAfter(minus, stCurrent);
-                    iterator = stCurrent;
+                        .InsertBefore(br, itr.IsOnlyRelay ? InstructionUtility.LoadConstant(true) : InstructionUtility.LoadConstant(-1))
+                        .InsertBefore(br, variables.StoreLocal(itr.VariableIndex));
                 }
-                processor.InsertAfter(iterator, brHandler);
-                iterator = brHandler;
-            }
-
-            for (Instruction iterator = handler.HandlerStart, end = handler.HandlerEnd; !(iterator is null) && !ReferenceEquals(iterator, end); iterator = iterator.Next)
-            {
-                if (iterator.OpCode != OpCodes.Endfinally) continue;
-                if (exceptionHandlerTree.VariableIndex == -1)
-                {
-                    if (exceptionHandlerTree.EndDestinations.Count == 0 || ReferenceEquals(exceptionHandlerTree.EndDestinations[0], iterator.Next))
-                    {
-                        processor.Remove(iterator);
-                        break;
-                    }
-                    var br = Instruction.Create(OpCodes.Br, exceptionHandlerTree.EndDestinations[0]);
-                    processor.Replace(iterator, br);
-                    break;
-                }
-                var ld = variables.LoadLocal(exceptionHandlerTree.VariableIndex);
-                var @switch = Instruction.Create(OpCodes.Switch, exceptionHandlerTree.ToArray());
-
                 processor
-                    .InsertBefore(iterator, ld)
-                    .Replace(iterator, @switch);
-                if (!(exceptionHandlerTree.Parent is null))
-                {
-                    var brParent = Instruction.Create(OpCodes.Br, exceptionHandlerTree.Parent.Handler.HandlerStart);
-                    processor.InsertAfter(@switch, brParent);
-                }
-                break;
+                    .InsertBefore(br, InstructionUtility.LoadConstant(switchIndex))
+                    .InsertBefore(br, variables.StoreLocal(tree.VariableIndex));
             }
-        }
-
-        private static void ProcessSeparatedHandler(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree)
-        {
-            ProcessEachHandlerDestinationMoreThanOne(processor, exceptionHandlerTree);
-        }
-
-
-        private static void ProcessEachHandlerDestinationMoreThanOne(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree)
-        {
-            var variables = processor.Processor.Body.Variables;
-            var variableIndex = variables.Count;
-            variables.Add(new VariableDefinition(processor.Processor.Body.Method.Module.TypeSystem.Int32));
-            var leaveInstructions = new List<Instruction>();
-            for (Instruction iterator = exceptionHandlerTree.Handler.TryStart, end = exceptionHandlerTree.Handler.TryEnd; !(iterator is null) && !ReferenceEquals(iterator, end); iterator = iterator.Next)
-            {
-                switch (iterator.OpCode.Code)
-                {
-                    case Code.Leave:
-                    case Code.Leave_S:
-                        var destinationInstruction = (Instruction)iterator.Operand;
-                        var parent = exceptionHandlerTree.Parent;
-
-                        var ld = InstructionUtility.LoadConstant(leaveInstructions.Count);
-                        var st = variables.StoreLocal(variableIndex);
-                        var br = Instruction.Create(OpCodes.Br, exceptionHandlerTree.Handler.HandlerStart);
-                        leaveInstructions.Add(destinationInstruction);
-                        processor
-                            .Replace(iterator, ld)
-                            .InsertAfter(ld, st)
-                            .InsertAfter(st, br);
-                        iterator = br;
-                        continue;
-                }
-            }
-            for (Instruction iterator = exceptionHandlerTree.Handler.HandlerStart, end = exceptionHandlerTree.Handler.HandlerEnd; !(iterator is null) && !ReferenceEquals(iterator, end); iterator = iterator.Next)
-            {
-                if (iterator.OpCode.Code != Code.Endfinally) continue;
-                var ld = variables.LoadLocal(variableIndex);
-                var @switch = Instruction.Create(OpCodes.Switch, leaveInstructions.ToArray());
-                processor
-                    .Replace(iterator, ld)
-                    .InsertAfter(ld, @switch);
-                iterator = @switch;
-            }
+            return br;
         }
     }
 }

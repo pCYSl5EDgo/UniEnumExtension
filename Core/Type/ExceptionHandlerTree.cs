@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,18 +14,18 @@ namespace UniEnumExtension
         public readonly ExceptionHandler Handler;
         public readonly List<ExceptionHandlerTree> Trees;
 
-        public readonly List<LeaveDestination> RelayDestinations;
-        public readonly List<Instruction> EndDestinations;
+        public Instruction[] EndDestinations;
         public int VariableIndex;
+        public bool IsOnlyRelay;
 
-        public (int constant, int variableIndex) FindIndex(Instruction destination)
+        public (int constant, ExceptionHandlerTree tree) FindIndex(Instruction destination)
         {
-            for (var i = 0; i < EndDestinations.Count; i++)
+            for (var i = 0; i < EndDestinations.Length; i++)
             {
                 if (ReferenceEquals(destination, EndDestinations[i]))
-                    return (i, VariableIndex);
+                    return (i, this);
             }
-            return Parent?.FindIndex(destination) ?? (-1, -1);
+            return Parent.FindIndex(destination);
         }
 
         public override string ToString()
@@ -34,12 +35,13 @@ namespace UniEnumExtension
             return buf.ToString();
         }
 
-        public Instruction[] ToArray() => EndDestinations.Concat(RelayDestinations.Select(x => x.Instruction)).ToArray();
+        public Instruction[] ToArray() => EndDestinations;
+
 
         private void Append(StringBuilder buf, int indent)
         {
             buf.AppendLine().Append(' ', indent << 2);
-            buf.Append(VariableIndex).Append(" : ").Append(RelayDestinations.Count).Append(" , ").Append(EndDestinations.Count);
+            buf.Append(VariableIndex).Append(" : ").Append(EndDestinations.Length);
             foreach (var tree in Trees)
             {
                 tree.Append(buf, indent + 1);
@@ -51,9 +53,9 @@ namespace UniEnumExtension
             Parent = default;
             Handler = handler;
             Trees = trees;
-            RelayDestinations = new List<LeaveDestination>();
-            EndDestinations = new List<Instruction>();
+            EndDestinations = Array.Empty<Instruction>();
             VariableIndex = -1;
+            IsOnlyRelay = false;
         }
 
         private ExceptionHandlerTree(ExceptionHandler handler) : this(handler, new List<ExceptionHandlerTree>()) { }
@@ -61,33 +63,40 @@ namespace UniEnumExtension
         public static ExceptionHandlerTree Create(MethodBody body)
         {
             var handlers = body.ExceptionHandlers;
-            switch (handlers.Count)
-            {
-                case 0:
-                    throw new ArgumentOutOfRangeException();
-                case 1:
-                    return new ExceptionHandlerTree(handlers[0]);
-            }
+            if (handlers.Count == 0) throw new ArgumentOutOfRangeException();
             var list = new List<ExceptionHandlerTree>(handlers.Count);
             foreach (var handler in handlers)
             {
                 var tree = new ExceptionHandlerTree(handler);
-                if (list.Count == 0)
+
+                for (var j = 0; j < list.Count; j++)
                 {
-                    list.Add(tree);
-                }
-                else
-                {
-                    for (var j = 0; j < list.Count; j++)
+                    if (list[j].TryLocateChild(tree))
                     {
-                        if (list[j].TryLocateChild(tree)) break;
-                        if (!tree.TryLocateChild(list[j])) continue;
+                        goto TAIL;
+                    }
+
+                    if (tree.TryLocateChild(list[j]))
+                    {
                         list[j] = tree;
-                        break;
+                        goto TAIL;
                     }
                 }
+                list.Add(tree);
+            TAIL:;
             }
-            var answer = list.Count == 1 ? list[0] : new ExceptionHandlerTree(null, list);
+            ExceptionHandlerTree answer;
+            if (list.Count == 1)
+            {
+                Debug.Log("Single");
+                answer = list[0];
+            }
+            else
+            {
+                Debug.Log("Multiple");
+                answer = new ExceptionHandlerTree(null, list);
+            }
+            Debug.Log(answer.Trees.Count);
             answer.ConstructDestinations();
             answer.CalculateVariableIndex(body);
             return answer;
@@ -99,12 +108,26 @@ namespace UniEnumExtension
             {
                 tree.CalculateVariableIndex(body);
             }
-            if (RelayDestinations.Count == 0 && EndDestinations.Count == 1)
+            var hasEndDestinations = EndDestinations.Length > 0;
+            if (IsOnlyRelay | hasEndDestinations)
             {
-                return;
+                VariableIndex = body.Variables.Count;
             }
-            VariableIndex = body.Variables.Count;
-            body.Variables.Add(new VariableDefinition(body.Method.Module.TypeSystem.Int32));
+            if (IsOnlyRelay)
+            {
+                if (hasEndDestinations)
+                {
+                    IsOnlyRelay = false;
+                }
+                else
+                {
+                    body.Variables.Add(new VariableDefinition(body.Method.Module.TypeSystem.Boolean));
+                }
+            }
+            if (hasEndDestinations)
+            {
+                body.Variables.Add(new VariableDefinition(body.Method.Module.TypeSystem.Int32));
+            }
         }
 
         public bool IsInMyTryRange(Instruction instruction) => instruction.IsInRange(Handler.TryStart, Handler.TryEnd);
@@ -114,10 +137,15 @@ namespace UniEnumExtension
             for (var index = 0; index < Trees.Count; index++)
             {
                 var tree = Trees[index];
-                if (tree.TryLocateChild(childCandidate)) return true;
-                if (!childCandidate.TryLocateChild(tree)) continue;
-                Trees[index] = tree;
-                return true;
+                if (tree.TryLocateChild(childCandidate))
+                {
+                    return true;
+                }
+                if (childCandidate.TryLocateChild(tree))
+                {
+                    Trees[index] = tree;
+                    return true;
+                }
             }
             if (!childCandidate.Handler.TryStart.IsInRange(Handler.TryStart, Handler.TryEnd)) return false;
             childCandidate.Parent = this;
@@ -135,16 +163,27 @@ namespace UniEnumExtension
             for (Instruction it = Handler.TryStart, end = Handler.TryEnd; !(it is null) && !ReferenceEquals(it, end);)
             {
                 var duplicate = Trees.FirstOrDefault(x => x.IsInMyTryRange(it));
-                if (!(duplicate is null))
+                if (duplicate is null)
+                {
+                    if (it.OpCode.Code == Code.Leave_S || it.OpCode.Code == Code.Leave)
+                    {
+                        var leaveDestination = new LeaveDestination((Instruction)it.Operand, this);
+                        if (Parent is null)
+                        {
+                            Array.Resize(ref EndDestinations, EndDestinations.Length + 1);
+                            EndDestinations[EndDestinations.Length - 1] = leaveDestination.Instruction;
+                        }
+                        else
+                        {
+                            Parent.Register(leaveDestination);
+                        }
+                    }
+                    it = it.Next;
+                }
+                else
                 {
                     it = duplicate.Handler.TryEnd;
-                    continue;
                 }
-                if (it.OpCode.Code == Code.Leave_S || it.OpCode.Code == Code.Leave)
-                {
-                    Register(new LeaveDestination((Instruction)it.Operand, this));
-                }
-                it = it.Next;
             }
         }
 
@@ -155,7 +194,8 @@ namespace UniEnumExtension
                 destination.ToTree = this;
                 if (!EndDestinations.Contains(destination.Instruction))
                 {
-                    EndDestinations.Add(destination.Instruction);
+                    Array.Resize(ref EndDestinations, EndDestinations.Length + 1);
+                    EndDestinations[EndDestinations.Length - 1] = destination.Instruction;
                 }
             }
             else if (Parent is null)
@@ -163,16 +203,14 @@ namespace UniEnumExtension
                 destination.ToTree = null;
                 if (!EndDestinations.Contains(destination.Instruction))
                 {
-                    EndDestinations.Add(destination.Instruction);
+                    Array.Resize(ref EndDestinations, EndDestinations.Length + 1);
+                    EndDestinations[EndDestinations.Length - 1] = destination.Instruction;
                 }
             }
             else
             {
+                IsOnlyRelay = true;
                 Parent.Register(destination);
-                if (RelayDestinations.All(x => !ReferenceEquals(x.Instruction, destination.Instruction)))
-                {
-                    RelayDestinations.Add(destination);
-                }
             }
         }
     }
