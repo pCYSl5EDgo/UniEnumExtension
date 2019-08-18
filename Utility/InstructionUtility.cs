@@ -1,10 +1,20 @@
 ﻿using System;
 using Mono.Cecil.Cil;
+using Mono.Collections.Generic;
 
 namespace UniEnumExtension
 {
     public static class InstructionUtility
     {
+        public static bool IsInRange(this Instruction target, Instruction start, Instruction end)
+        {
+            for (var iterator = start; !(iterator is null) && !ReferenceEquals(iterator, end); iterator = iterator.Next)
+            {
+                if (ReferenceEquals(iterator, target)) return true;
+            }
+            return false;
+        }
+
         public static int GetInt32(this Instruction loadConstantInstruction)
         {
             switch (loadConstantInstruction.OpCode.Code)
@@ -34,6 +44,23 @@ namespace UniEnumExtension
                 case Code.Ldc_I4:
                     return (int)loadConstantInstruction.Operand;
                 default: throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        public static Instruction LoadLocal(this Collection<VariableDefinition> variables, int index)
+        {
+            switch (index)
+            {
+                case 0:
+                    return Instruction.Create(OpCodes.Ldloc_0);
+                case 1:
+                    return Instruction.Create(OpCodes.Ldloc_1);
+                case 2:
+                    return Instruction.Create(OpCodes.Ldloc_2);
+                case 3:
+                    return Instruction.Create(OpCodes.Ldloc_3);
+                default:
+                    return Instruction.Create(index <= 255 ? OpCodes.Ldloc_S : OpCodes.Ldloc, variables[index]);
             }
         }
 
@@ -68,7 +95,7 @@ namespace UniEnumExtension
                 case 7: return Instruction.Create(OpCodes.Ldc_I4_7);
                 case -1: return Instruction.Create(OpCodes.Ldc_I4_M1);
             }
-            if (value >= sbyte.MinValue && value <= sbyte.MaxValue)
+            if (value >= SByte.MinValue && value <= SByte.MaxValue)
                 return Instruction.Create(OpCodes.Ldc_I4_S, (sbyte)value);
             return Instruction.Create(OpCodes.Ldc_I4, value);
         }
@@ -169,7 +196,7 @@ namespace UniEnumExtension
                     };
                     break;
                 default:
-                    if (value <= sbyte.MaxValue && value >= sbyte.MinValue)
+                    if (value <= SByte.MaxValue && value >= SByte.MinValue)
                     {
                         answer = new[]
                         {
@@ -177,7 +204,7 @@ namespace UniEnumExtension
                             Instruction.Create(OpCodes.Conv_I8),
                         };
                     }
-                    else if (value <= int.MaxValue && value >= int.MinValue)
+                    else if (value <= Int32.MaxValue && value >= Int32.MinValue)
                     {
                         answer = new[]
                         {
@@ -195,6 +222,23 @@ namespace UniEnumExtension
                     break;
             }
             return answer;
+        }
+
+        public static Instruction StoreLocal(this Collection<VariableDefinition> variables, int index)
+        {
+            switch (index)
+            {
+                case 0:
+                    return Instruction.Create(OpCodes.Stloc_0);
+                case 1:
+                    return Instruction.Create(OpCodes.Stloc_1);
+                case 2:
+                    return Instruction.Create(OpCodes.Stloc_2);
+                case 3:
+                    return Instruction.Create(OpCodes.Stloc_3);
+                default:
+                    return Instruction.Create(index <= 255 ? OpCodes.Stloc_S : OpCodes.Stloc, variables[index]);
+            }
         }
 
         public static Instruction Bgt<T>(Instruction instruction)

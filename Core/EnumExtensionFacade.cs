@@ -24,6 +24,7 @@ namespace UniEnumExtension
                 Array.Empty<IModuleProcessor>(),
                 new ITypeProcessor[]
                 {
+                    new BurstForeachTypeProcessor(),
                     new EnumIsDefinedTypeProcessorString(isLittleEndian),
                     new EnumIsDefinedTypeProcessorNumberGeneric(),
                     new EnumExtensionProcessorGeneric<byte>(),

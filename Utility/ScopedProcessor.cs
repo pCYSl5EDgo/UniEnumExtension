@@ -1,22 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
 using Mono.Cecil.Cil;
+using Mono.Collections.Generic;
 
 namespace UniEnumExtension
 {
     public sealed class ScopedProcessor : IDisposable
     {
-        private readonly ILProcessor processor;
+        public readonly ILProcessor Processor;
         private readonly List<Instruction> branchInstructions;
         private readonly List<Instruction> switchInstructions;
-        private bool isAdded;
+        private readonly Collection<ExceptionHandler> exceptionHandlers;
+        public bool IsAdded { get; private set; }
 
         public ScopedProcessor(ILProcessor processor)
         {
-            this.processor = processor;
-            isAdded = false;
+            Processor = processor;
+            IsAdded = false;
             branchInstructions = new List<Instruction>();
             switchInstructions = new List<Instruction>();
+            exceptionHandlers = processor.Body.ExceptionHandlers;
             foreach (var instruction in processor.Body.Instructions)
             {
                 if (instruction.OpCode.Code == Code.Switch)
@@ -72,13 +75,24 @@ namespace UniEnumExtension
                         destination = next;
                 }
             }
-            processor.Remove(target);
+            foreach (var exceptionHandler in exceptionHandlers)
+            {
+                if (ReferenceEquals(exceptionHandler.HandlerStart, target))
+                    exceptionHandler.HandlerStart = next;
+                if (ReferenceEquals(exceptionHandler.HandlerEnd, target))
+                    exceptionHandler.HandlerEnd = next;
+                if (ReferenceEquals(exceptionHandler.TryStart, target))
+                    exceptionHandler.TryStart = next;
+                if (ReferenceEquals(exceptionHandler.TryEnd, target))
+                    exceptionHandler.TryEnd = next;
+            }
+            Processor.Remove(target);
             return this;
         }
 
         public ScopedProcessor Replace(Instruction target, Instruction next)
         {
-            isAdded |= target.OpCode.Size < next.OpCode.Size;
+            IsAdded |= target.OpCode.Size < next.OpCode.Size;
             for (var index = branchInstructions.Count - 1; index >= 0; index--)
             {
                 var branchInstruction = branchInstructions[index];
@@ -116,20 +130,38 @@ namespace UniEnumExtension
             {
                 branchInstructions.Add(next);
             }
-            processor.Replace(target, next);
+            foreach (var exceptionHandler in exceptionHandlers)
+            {
+                if (ReferenceEquals(exceptionHandler.HandlerStart, target))
+                    exceptionHandler.HandlerStart = next;
+                if (ReferenceEquals(exceptionHandler.HandlerEnd, target))
+                    exceptionHandler.HandlerEnd = next;
+                if (ReferenceEquals(exceptionHandler.TryStart, target))
+                    exceptionHandler.TryStart = next;
+                if (ReferenceEquals(exceptionHandler.TryEnd, target))
+                    exceptionHandler.TryEnd = next;
+            }
+            Processor.Replace(target, next);
             return this;
         }
 
         public ScopedProcessor InsertAfter(Instruction target, Instruction next)
         {
-            isAdded = true;
-            processor.InsertAfter(target, next);
+            IsAdded = true;
+            Processor.InsertAfter(target, next);
+            return this;
+        }
+
+        public ScopedProcessor InsertBefore(Instruction target, Instruction next)
+        {
+            IsAdded = true;
+            Processor.InsertBefore(target, next);
             return this;
         }
 
         public void Dispose()
         {
-            if (!isAdded) return;
+            if (!IsAdded) return;
             HEAD:
             for (var i = branchInstructions.Count - 1; i >= 0; i--)
             {

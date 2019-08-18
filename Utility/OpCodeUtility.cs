@@ -6,90 +6,68 @@ namespace UniEnumExtension
     {
         public static OpCode FromShortToNormal(this OpCode opCode)
         {
-            PseudoOpCode p = opCode;
-            p.OperandTypeProperty = OperandType.ShortInlineBrTarget;
-            p.CodeProperty = p.CodeProperty.FromShortToNormal();
-            p.Op2 += 13;
-            return p;
-        }
-
-        public static Code FromShortToNormal(this Code opCode)
-        {
-            switch (opCode)
-            {
-                case Code.Blt_S:
-                    return Code.Blt;
-                case Code.Blt_Un_S:
-                    return Code.Blt_Un;
-                case Code.Ble_S:
-                    return Code.Ble;
-                case Code.Ble_Un_S:
-                    return Code.Ble_Un;
-                case Code.Bgt_S:
-                    return Code.Bgt;
-                case Code.Bgt_Un_S:
-                    return Code.Bgt_Un;
-                case Code.Bge_S:
-                    return Code.Bge;
-                case Code.Bge_Un_S:
-                    return Code.Bge_Un;
-                case Code.Beq_S:
-                    return Code.Beq;
-                case Code.Bne_Un_S:
-                    return Code.Bne_Un;
-                case Code.Br_S:
-                    return Code.Br;
-                case Code.Brtrue_S:
-                    return Code.Brtrue;
-                case Code.Brfalse_S:
-                    return Code.Brfalse;
-                default:
-                    return opCode;
-            }
+            if (opCode == OpCodes.Blt_S)
+                return OpCodes.Blt;
+            if (opCode == OpCodes.Blt_Un_S)
+                return OpCodes.Blt_Un;
+            if (opCode == OpCodes.Ble_S)
+                return OpCodes.Ble;
+            if (opCode == OpCodes.Ble_Un_S)
+                return OpCodes.Ble_Un;
+            if (opCode == OpCodes.Bgt_S)
+                return OpCodes.Bgt;
+            if (opCode == OpCodes.Bgt_Un_S)
+                return OpCodes.Bgt_Un;
+            if (opCode == OpCodes.Bge_S)
+                return OpCodes.Bge;
+            if (opCode == OpCodes.Bge_Un_S)
+                return OpCodes.Bge_Un;
+            if (opCode == OpCodes.Beq_S)
+                return OpCodes.Beq;
+            if (opCode == OpCodes.Bne_Un_S)
+                return OpCodes.Bne_Un;
+            if (opCode == OpCodes.Br_S)
+                return OpCodes.Br;
+            if (opCode == OpCodes.Brtrue_S)
+                return OpCodes.Brtrue;
+            if (opCode == OpCodes.Brfalse_S)
+                return OpCodes.Brfalse;
+            if (opCode == OpCodes.Leave_S)
+                return OpCodes.Leave;
+            return opCode;
         }
 
         public static OpCode FromNormalToShort(this OpCode opCode)
         {
-            PseudoOpCode p = opCode;
-            p.OperandTypeProperty = OperandType.InlineBrTarget;
-            p.CodeProperty = p.CodeProperty.FromNormalToShort();
-            p.Op2 -= 13;
-            return p;
-        }
-
-        public static Code FromNormalToShort(this Code opCode)
-        {
-            switch (opCode)
-            {
-                case Code.Blt:
-                    return Code.Blt_S;
-                case Code.Blt_Un:
-                    return Code.Blt_Un_S;
-                case Code.Ble:
-                    return Code.Ble_S;
-                case Code.Ble_Un:
-                    return Code.Ble_Un_S;
-                case Code.Bgt:
-                    return Code.Bgt_S;
-                case Code.Bgt_Un:
-                    return Code.Bgt_Un_S;
-                case Code.Bge:
-                    return Code.Bge_S;
-                case Code.Bge_Un:
-                    return Code.Bge_Un_S;
-                case Code.Beq:
-                    return Code.Beq_S;
-                case Code.Bne_Un:
-                    return Code.Bne_Un_S;
-                case Code.Br:
-                    return Code.Br_S;
-                case Code.Brtrue:
-                    return Code.Brtrue_S;
-                case Code.Brfalse:
-                    return Code.Brfalse_S;
-                default:
-                    return opCode;
-            }
+            if (opCode == OpCodes.Blt)
+                return OpCodes.Blt_S;
+            if (opCode == OpCodes.Blt_Un)
+                return OpCodes.Blt_Un_S;
+            if (opCode == OpCodes.Ble)
+                return OpCodes.Ble_S;
+            if (opCode == OpCodes.Ble_Un)
+                return OpCodes.Ble_Un_S;
+            if (opCode == OpCodes.Bgt)
+                return OpCodes.Bgt_S;
+            if (opCode == OpCodes.Bgt_Un)
+                return OpCodes.Bgt_Un_S;
+            if (opCode == OpCodes.Bge)
+                return OpCodes.Bge_S;
+            if (opCode == OpCodes.Bge_Un)
+                return OpCodes.Bge_Un_S;
+            if (opCode == OpCodes.Beq)
+                return OpCodes.Beq_S;
+            if (opCode == OpCodes.Bne_Un)
+                return OpCodes.Bne_Un_S;
+            if (opCode == OpCodes.Br)
+                return OpCodes.Br_S;
+            if (opCode == OpCodes.Brtrue)
+                return OpCodes.Brtrue_S;
+            if (opCode == OpCodes.Brfalse)
+                return OpCodes.Brfalse_S;
+            if (opCode == OpCodes.Leave)
+                return OpCodes.Leave_S;
+            return opCode;
         }
 
         public static bool StackCountChange(this OpCode code, out int count)
