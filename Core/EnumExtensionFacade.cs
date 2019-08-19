@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Mono.Cecil;
 using UnityEditor;
 using UnityEngine;
@@ -102,23 +103,26 @@ namespace UniEnumExtension
         public void Extend(IEnumerable<string> assemblyPaths)
         {
             InitializeModules(assemblyPaths);
-            foreach (var nameAndModule in nameToModuleDefinitionDictionary)
+            var nameAndModules = nameToModuleDefinitionDictionary.ToArray();
+            for (int i = 0; i < 256; i++)
             {
-                ProcessEachAssembly(nameAndModule.Value.module);
+                foreach (var nameAndModule in nameAndModules)
+                {
+                    ProcessEachAssembly(nameAndModule.Value.module, moduleProcessors[i], typeProcessors[i], methodProcessors[i]);
+                }
             }
         }
 
-        private void ProcessEachAssembly(ModuleDefinition module)
+        private void ProcessEachAssembly(ModuleDefinition module, IModuleProcessor[] moduleProcessorArray, ITypeProcessor[] typeProcessorArray, IMethodProcessor[] methodProcessorArray)
         {
             var types = module.Types;
-            for (var j = 0; j < 256; j++)
+            foreach (var moduleProcessor in moduleProcessorArray)
             {
-                var methodProcessorArray = methodProcessors[j];
-                var typeProcessorArray = typeProcessors[j];
-                for (var i = types.Count - 1; i >= 0; i--)
-                {
-                    Process(types[i], typeProcessorArray, methodProcessorArray);
-                }
+                moduleProcessor.Process(module);
+            }
+            for (var i = types.Count - 1; i >= 0; i--)
+            {
+                Process(types[i], typeProcessorArray, methodProcessorArray);
             }
         }
 
