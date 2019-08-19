@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,7 +14,6 @@ namespace UniEnumExtension
         public readonly List<ExceptionHandlerTree> Trees;
 
         public Instruction[] EndDestinations;
-        public int VariableIndex;
         public bool IsOnlyRelay;
 
         public (int constant, ExceptionHandlerTree tree) FindIndex(Instruction destination)
@@ -41,7 +39,7 @@ namespace UniEnumExtension
         private void Append(StringBuilder buf, int indent)
         {
             buf.AppendLine().Append(' ', indent << 2);
-            buf.Append(VariableIndex).Append(" : ").Append(EndDestinations.Length);
+            buf.Append(EndDestinations.Length);
             foreach (var tree in Trees)
             {
                 tree.Append(buf, indent + 1);
@@ -54,7 +52,6 @@ namespace UniEnumExtension
             Handler = handler;
             Trees = trees;
             EndDestinations = Array.Empty<Instruction>();
-            VariableIndex = -1;
             IsOnlyRelay = false;
         }
 
@@ -98,36 +95,7 @@ namespace UniEnumExtension
             }
             Debug.Log(answer.Trees.Count);
             answer.ConstructDestinations();
-            answer.CalculateVariableIndex(body);
             return answer;
-        }
-
-        private void CalculateVariableIndex(MethodBody body)
-        {
-            foreach (var tree in Trees)
-            {
-                tree.CalculateVariableIndex(body);
-            }
-            var hasEndDestinations = EndDestinations.Length > 0;
-            if (IsOnlyRelay | hasEndDestinations)
-            {
-                VariableIndex = body.Variables.Count;
-            }
-            if (IsOnlyRelay)
-            {
-                if (hasEndDestinations)
-                {
-                    IsOnlyRelay = false;
-                }
-                else
-                {
-                    body.Variables.Add(new VariableDefinition(body.Method.Module.TypeSystem.Boolean));
-                }
-            }
-            if (hasEndDestinations)
-            {
-                body.Variables.Add(new VariableDefinition(body.Method.Module.TypeSystem.Int32));
-            }
         }
 
         public bool IsInMyTryRange(Instruction instruction) => instruction.IsInRange(Handler.TryStart, Handler.TryEnd);

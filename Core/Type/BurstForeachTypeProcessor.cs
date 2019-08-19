@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Collections.Generic;
@@ -62,20 +61,23 @@ namespace UniEnumExtension
 
         private static void ProcessHandler(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree)
         {
-            var variables = processor.Processor.Body.Variables;
-
-            Instruction iterator = exceptionHandlerTree.Handler.HandlerStart;
+            var iterator = exceptionHandlerTree.Handler.HandlerStart;
             for (var end = exceptionHandlerTree.Handler.HandlerEnd; iterator != end; iterator = iterator.Next)
             {
                 if (iterator.OpCode.Code == Code.Endfinally)
                     break;
             }
-            
+
             if (iterator is null)
             {
-                Debug.Log("FMEOINONOAJN");
                 return;
             }
+
+            var @switch = Instruction.Create(OpCodes.Switch, exceptionHandlerTree.EndDestinations);
+            processor.Replace(iterator, @switch);
+            if (exceptionHandlerTree.Parent is null) return;
+            var br = Instruction.Create(OpCodes.Br, exceptionHandlerTree.Parent.Handler.HandlerStart);
+            processor.InsertAfter(@switch, br);
         }
 
         private static void ProcessTry(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree)
@@ -100,28 +102,14 @@ namespace UniEnumExtension
             var (switchIndex, tree) = exceptionHandlerTree.FindIndex(destination);
 
             var br = Instruction.Create(OpCodes.Br, exceptionHandlerTree.Handler.HandlerStart);
-            if (ReferenceEquals(tree, exceptionHandlerTree.Parent))
+            processor.Replace(iterator, br);
+            for (var itr = exceptionHandlerTree; !ReferenceEquals(itr, tree); itr = itr.Parent)
             {
-                var ldc = InstructionUtility.LoadConstant(switchIndex);
-                var stLoc = variables.StoreLocal(tree.VariableIndex);
                 processor
-                    .Replace(iterator, br)
-                    .InsertBefore(br, stLoc)
-                    .InsertBefore(stLoc, ldc);
+                    .InsertBefore(br, InstructionUtility.LoadConstant(itr.EndDestinations.Length));
             }
-            else
-            {
-                processor.Replace(iterator, br);
-                for (var itr = exceptionHandlerTree; !ReferenceEquals(itr, tree); itr = itr.Parent)
-                {
-                    processor
-                        .InsertBefore(br, itr.IsOnlyRelay ? InstructionUtility.LoadConstant(true) : InstructionUtility.LoadConstant(-1))
-                        .InsertBefore(br, variables.StoreLocal(itr.VariableIndex));
-                }
-                processor
-                    .InsertBefore(br, InstructionUtility.LoadConstant(switchIndex))
-                    .InsertBefore(br, variables.StoreLocal(tree.VariableIndex));
-            }
+            processor
+                .InsertBefore(br, InstructionUtility.LoadConstant(switchIndex));
             return br;
         }
     }
