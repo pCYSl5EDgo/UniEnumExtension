@@ -161,6 +161,16 @@ namespace UniEnumExtension
 
         public void Dispose()
         {
+            {
+                var bodyInstructions = Processor.Body.Instructions;
+                for (var i = bodyInstructions.Count - 1; i >= 0; i--)
+                {
+                    var instruction = bodyInstructions[i];
+                    if (instruction.OpCode.Code != Code.Br && instruction.OpCode.Code != Code.Br_S) continue;
+                    if (!ReferenceEquals(instruction.Next, (Instruction)instruction.Operand)) continue;
+                    Remove(instruction);
+                }
+            }
             if (!IsAdded) return;
             HEAD:
             for (var i = branchInstructions.Count - 1; i >= 0; i--)
