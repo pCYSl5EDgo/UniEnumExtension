@@ -20,7 +20,7 @@ namespace UniEnumExtension
             EndBuildStep = typeof(BuildReport).GetMethod(nameof(EndBuildStep), BindingFlags.Instance | BindingFlags.NonPublic);
         }
 
-        public int callbackOrder => 1;
+        public int callbackOrder => -1;
         public void OnPostBuildPlayerScriptDLLs(BuildReport report)
         {
             step[0] = BeginBuildStep.Invoke(report, uniEnumExtension);

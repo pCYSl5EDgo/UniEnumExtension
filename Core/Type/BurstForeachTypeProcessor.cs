@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Collections.Generic;
@@ -33,9 +34,17 @@ namespace UniEnumExtension
             }
             using (ScopedProcessor processor = body.GetILProcessor())
             {
-                var exceptionHandlerTree = ExceptionHandlerTree.Create(body);
-                Debug.Log("count : " + body.ExceptionHandlers.Count + exceptionHandlerTree);
-                ProcessComplexTree(processor, exceptionHandlerTree);
+                processor.Simplify();
+                var exceptionHandlerTrees = ExceptionHandlerTree.Create(body);
+                var totalDepth = exceptionHandlerTrees.Max(x => x.TotalDepth);
+                for (var i = 0; i < totalDepth; i++)
+                {
+                    body.Variables.Add(new VariableDefinition(methodDefinition.Module.TypeSystem.Int32));
+                }
+                foreach (var exceptionHandlerTree in exceptionHandlerTrees)
+                {
+                    ProcessComplexTree(processor, exceptionHandlerTree);
+                }
             }
             handlers.Clear();
         }
@@ -73,11 +82,21 @@ namespace UniEnumExtension
                 return;
             }
 
-            var @switch = Instruction.Create(OpCodes.Switch, exceptionHandlerTree.EndDestinations);
-            processor.Replace(iterator, @switch);
-            if (exceptionHandlerTree.Parent is null) return;
-            var br = Instruction.Create(OpCodes.Br, exceptionHandlerTree.Parent.Handler.HandlerStart);
-            processor.InsertAfter(@switch, br);
+            var methodBody = processor.Processor.Body;
+            var variables = methodBody.Variables;
+
+            var currentDepth = exceptionHandlerTree.CurrentDepth;
+            var ld = variables.LoadLocal(variables.Count - 1 - currentDepth);
+            Instruction @switch;
+            if (exceptionHandlerTree.Parent?.Handler is null)
+            {
+                @switch = Instruction.Create(OpCodes.Switch, exceptionHandlerTree.EndDestinations);
+            }
+            else
+            {
+                @switch = Instruction.Create(OpCodes.Switch, exceptionHandlerTree.EndDestinations.Append(exceptionHandlerTree.Parent.Handler.HandlerStart).ToArray());
+            }
+            processor.Replace(iterator, ld).InsertAfter(ld, @switch);
         }
 
         private static void ProcessTry(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree)
@@ -97,19 +116,23 @@ namespace UniEnumExtension
 
         private static Instruction ProcessLeave(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree, Instruction iterator, Collection<VariableDefinition> variables, ExceptionHandler handler)
         {
-            var destination = (Instruction)iterator.Operand;
+            var (_, toInstruction, tree) = exceptionHandlerTree.LeaveTupleList.First(x => ReferenceEquals(x.fromInstruction, iterator));
 
-            var (switchIndex, tree) = exceptionHandlerTree.FindIndex(destination);
+            var loadConstantInstruction = InstructionUtility.LoadConstant(Array.IndexOf(tree.EndDestinations, toInstruction));
+            processor.Replace(iterator, loadConstantInstruction);
+            var storeLocalInstruction = variables.StoreLocal(variables.Count - 1 - tree.CurrentDepth);
+            processor.InsertAfter(loadConstantInstruction, storeLocalInstruction);
 
             var br = Instruction.Create(OpCodes.Br, exceptionHandlerTree.Handler.HandlerStart);
-            processor.Replace(iterator, br);
-            for (var itr = exceptionHandlerTree; !ReferenceEquals(itr, tree); itr = itr.Parent)
+            processor.InsertAfter(storeLocalInstruction, br);
+            var itr = exceptionHandlerTree;
+            for (var currentIndex = variables.Count - 1 - itr.CurrentDepth; !ReferenceEquals(itr, tree); itr = itr.Parent, ++currentIndex)
             {
-                processor
-                    .InsertBefore(br, InstructionUtility.LoadConstant(itr.EndDestinations.Length));
+                var ldc = InstructionUtility.LoadConstant(itr.EndDestinations.Length);
+                var stLoc = variables.StoreLocal(currentIndex);
+                processor.InsertBefore(br, ldc).InsertBefore(br, stLoc);
             }
-            processor
-                .InsertBefore(br, InstructionUtility.LoadConstant(switchIndex));
+
             return br;
         }
     }

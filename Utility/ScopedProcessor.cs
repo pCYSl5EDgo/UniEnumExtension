@@ -20,7 +20,8 @@ namespace UniEnumExtension
             branchInstructions = new List<Instruction>();
             switchInstructions = new List<Instruction>();
             exceptionHandlers = processor.Body.ExceptionHandlers;
-            foreach (var instruction in processor.Body.Instructions)
+            var instructions = processor.Body.Instructions;
+            foreach (var instruction in instructions)
             {
                 if (instruction.OpCode.Code == Code.Switch)
                 {
@@ -31,6 +32,61 @@ namespace UniEnumExtension
                     branchInstructions.Add(instruction);
                 }
             }
+        }
+
+        public void Simplify()
+        {
+            IsAdded = true;
+            var instructions = Processor.Body.Instructions;
+            for (int i = 0; i < instructions.Count; i++)
+            {
+                switch (instructions[i].OpCode.Code)
+                {
+                    case Code.Br_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Br, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Brtrue_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Brtrue, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Brfalse_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Brfalse, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Blt_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Blt, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Blt_Un_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Blt_Un, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Bgt_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Bgt, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Bgt_Un_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Bgt_Un, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Ble_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Ble, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Ble_Un_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Ble_Un, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Bge_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Bge, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Bge_Un_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Bge_Un, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Beq_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Beq, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Bne_Un_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Bne_Un, (Instruction)instructions[i].Operand));
+                        break;
+                    case Code.Leave_S:
+                        Replace(instructions[i], Instruction.Create(OpCodes.Leave, (Instruction)instructions[i].Operand));
+                        break;
+                }
+            }
+            RecalculateOffset();
         }
 
         public static implicit operator ScopedProcessor(ILProcessor processor) => new ScopedProcessor(processor);
@@ -149,6 +205,14 @@ namespace UniEnumExtension
         {
             IsAdded = true;
             Processor.InsertAfter(target, next);
+            if (next.OpCode == OpCodes.Switch)
+            {
+                switchInstructions.Add(next);
+            }
+            else if (next.OpCode.FlowControl == FlowControl.Branch || next.OpCode.FlowControl == FlowControl.Cond_Branch)
+            {
+                branchInstructions.Add(next);
+            }
             return this;
         }
 
@@ -156,42 +220,176 @@ namespace UniEnumExtension
         {
             IsAdded = true;
             Processor.InsertBefore(target, next);
+            if (next.OpCode == OpCodes.Switch)
+            {
+                switchInstructions.Add(next);
+            }
+            else if (next.OpCode.FlowControl == FlowControl.Branch || next.OpCode.FlowControl == FlowControl.Cond_Branch)
+            {
+                branchInstructions.Add(next);
+            }
             return this;
         }
 
         public void Dispose()
         {
+            PreProcessOptimization();
+            if (!IsAdded) return;
+            Optimize();
+        }
+
+        private void PreProcessOptimization()
+        {
+            var bodyInstructions = Processor.Body.Instructions;
+            while (true)
             {
-                var bodyInstructions = Processor.Body.Instructions;
+                var notChanged = true;
                 for (var i = bodyInstructions.Count - 1; i >= 0; i--)
                 {
                     var instruction = bodyInstructions[i];
-                    if (instruction.OpCode.Code != Code.Br && instruction.OpCode.Code != Code.Br_S) continue;
-                    if (!ReferenceEquals(instruction.Next, (Instruction)instruction.Operand)) continue;
-                    Remove(instruction);
+                    switch (instruction.OpCode.Code)
+                    {
+                        case Code.Nop:
+                            Remove(instruction);
+                            notChanged = false;
+                            break;
+                        case Code.Br:
+                        case Code.Br_S:
+                            {
+                                if (!ReferenceEquals(instruction.Next, (Instruction)instruction.Operand)) continue;
+                                Remove(instruction);
+                                notChanged = false;
+                                break;
+                            }
+                        case Code.Switch:
+                            {
+                                var destinationInstructions = (Instruction[])instruction.Operand;
+                                switch (destinationInstructions.Length)
+                                {
+                                    case 0:
+                                        InsertBefore(instruction, Instruction.Create(OpCodes.Pop));
+                                        notChanged = false;
+                                        Remove(instruction);
+                                        break;
+                                    case 1 when ReferenceEquals(destinationInstructions[0], instruction.Next):
+                                        InsertBefore(instruction, Instruction.Create(OpCodes.Pop));
+                                        notChanged = false;
+                                        Remove(instruction);
+                                        break;
+                                }
+                                break;
+                            }
+                    }
                 }
+                if (notChanged) break;
             }
-            if (!IsAdded) return;
-            HEAD:
-            for (var i = branchInstructions.Count - 1; i >= 0; i--)
+        }
+
+        private void Optimize()
+        {
+            var instructions = Processor.Body.Instructions;
+            Instruction destinationInstruction;
+            bool changed;
+            do
             {
-                var instruction = branchInstructions[i];
-                var offset0 = instruction.Offset;
-                var targetInstruction = (Instruction)instruction.Operand;
-                var offset1 = targetInstruction.Offset;
-                var diff = offset1 - offset0;
-                if (instruction.OpCode.OperandType == OperandType.ShortInlineBrTarget && (diff > sbyte.MaxValue || diff < sbyte.MinValue))
+                var offset = 0;
+                changed = false;
+                for (var i = 0; i < instructions.Count; i++)
                 {
-                    var replaceInstruction = Instruction.Create(instruction.OpCode.FromShortToNormal(), targetInstruction);
-                    Replace(instruction, replaceInstruction);
-                    goto HEAD;
+                    instructions[i].Offset = offset;
+                    switch (instructions[i].OpCode.Code)
+                    {
+                        case Code.Br:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Br_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Brtrue:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Brtrue_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Brfalse:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Brfalse_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Blt:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Blt_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Blt_Un:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Blt_Un_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Bgt:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Bgt_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Bgt_Un:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Bgt_Un_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Ble:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Ble_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Ble_Un:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Ble_Un_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Bge:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Bge_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Bge_Un:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Bge_Un_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Beq:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Beq_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Bne_Un:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Bne_Un_S, destinationInstruction));
+                            changed = true;
+                            break;
+                        case Code.Leave:
+                            if (ShouldContinue(instructions, i, out destinationInstruction)) { offset += instructions[i].GetSize(); continue; }
+                            Replace(instructions[i], Instruction.Create(OpCodes.Leave_S, destinationInstruction));
+                            changed = true;
+                            break;
+                    }
+                    offset += instructions[i].GetSize();
                 }
-                if (instruction.OpCode.OperandType != OperandType.InlineBrTarget || diff < sbyte.MinValue || diff > sbyte.MaxValue) continue;
-                {
-                    var replaceInstruction = Instruction.Create(instruction.OpCode.FromNormalToShort(), targetInstruction);
-                    Replace(instruction, replaceInstruction);
-                    goto HEAD;
-                }
+            } while (changed);
+        }
+
+        private static bool ShouldContinue(Collection<Instruction> instructions, int i, out Instruction destinationInstruction)
+        {
+            destinationInstruction = (Instruction)instructions[i].Operand;
+            var diff = destinationInstruction.Offset - instructions[i].Offset;
+            if (diff > sbyte.MaxValue || diff < sbyte.MinValue) return true;
+            return false;
+        }
+
+        private void RecalculateOffset()
+        {
+            var offset = 0;
+            foreach (var instruction in Processor.Body.Instructions)
+            {
+                instruction.Offset = offset;
+                offset += instruction.GetSize();
             }
         }
     }

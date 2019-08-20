@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Mono.Cecil.Cil;
-using UnityEngine;
+using Mono.Collections.Generic;
 
 namespace UniEnumExtension
 {
@@ -12,19 +12,33 @@ namespace UniEnumExtension
         public ExceptionHandlerTree Parent;
         public readonly ExceptionHandler Handler;
         public readonly List<ExceptionHandlerTree> Trees;
+        public readonly List<(Instruction fromInstruction, Instruction toInstruction, ExceptionHandlerTree toTree)> LeaveTupleList;
 
         public Instruction[] EndDestinations;
-        public bool IsOnlyRelay;
+        public bool IsRelay;
 
-        public (int constant, ExceptionHandlerTree tree) FindIndex(Instruction destination)
+        public int TotalDepth => 1 + (Trees.Count != 0 ? Trees.Max(x => x.TotalDepth) : 0);
+
+        public int CurrentDepth
         {
-            for (var i = 0; i < EndDestinations.Length; i++)
+            get
             {
-                if (ReferenceEquals(destination, EndDestinations[i]))
-                    return (i, this);
+                var answer = 0;
+                for (var itr = Parent; !(itr is null); itr = itr.Parent)
+                {
+                    ++answer;
+                }
+                return answer;
             }
-            return Parent.FindIndex(destination);
         }
+
+        private void AddDestination(Instruction instruction)
+        {
+            Array.Resize(ref EndDestinations, EndDestinations.Length + 1);
+            EndDestinations[EndDestinations.Length - 1] = instruction;
+        }
+
+        public bool HasChild => Trees.Count != 0;
 
         public override string ToString()
         {
@@ -33,13 +47,10 @@ namespace UniEnumExtension
             return buf.ToString();
         }
 
-        public Instruction[] ToArray() => EndDestinations;
-
-
         private void Append(StringBuilder buf, int indent)
         {
             buf.AppendLine().Append(' ', indent << 2);
-            buf.Append(EndDestinations.Length);
+            buf.Append(IsRelay).Append(" : ").Append(EndDestinations.Length).Append(" with ").Append(Trees.Count);
             foreach (var tree in Trees)
             {
                 tree.Append(buf, indent + 1);
@@ -52,134 +63,81 @@ namespace UniEnumExtension
             Handler = handler;
             Trees = trees;
             EndDestinations = Array.Empty<Instruction>();
-            IsOnlyRelay = false;
+            IsRelay = false;
+            LeaveTupleList = new List<(Instruction, Instruction, ExceptionHandlerTree)>();
         }
 
         private ExceptionHandlerTree(ExceptionHandler handler) : this(handler, new List<ExceptionHandlerTree>()) { }
 
-        public static ExceptionHandlerTree Create(MethodBody body)
+        public static List<ExceptionHandlerTree> Create(MethodBody body)
         {
             var handlers = body.ExceptionHandlers;
             if (handlers.Count == 0) throw new ArgumentOutOfRangeException();
-            var list = new List<ExceptionHandlerTree>(handlers.Count);
-            foreach (var handler in handlers)
+            var answer = CreateTreeRelationship(body.Instructions, handlers);
+            foreach (var tree in answer.Trees)
             {
-                var tree = new ExceptionHandlerTree(handler);
+                tree.Parent = default;
+            }
+            return answer.Trees;
+        }
 
-                for (var j = 0; j < list.Count; j++)
+        private static ExceptionHandlerTree CreateTreeRelationship(Collection<Instruction> instructions, Collection<ExceptionHandler> handlers)
+        {
+            var stack = new Stack<ExceptionHandlerTree>();
+            var answer = new ExceptionHandlerTree(null);
+            stack.Push(answer);
+            var tuples = new List<(Instruction, ExceptionHandlerTree parentTree)>(instructions.Count);
+
+            foreach (var instruction in instructions)
+            {
+                var oldTop = stack.Peek();
+                if (!(oldTop.Handler is null) && ReferenceEquals(oldTop.Handler.TryEnd, instruction))
                 {
-                    if (list[j].TryLocateChild(tree))
-                    {
-                        goto TAIL;
-                    }
-
-                    if (tree.TryLocateChild(list[j]))
-                    {
-                        list[j] = tree;
-                        goto TAIL;
-                    }
+                    stack.Pop();
                 }
-                list.Add(tree);
-            TAIL:;
+                var handler = handlers.FirstOrDefault(x => ReferenceEquals(instruction, x.TryStart));
+                if (!(handler is null))
+                {
+                    var exceptionHandlerTree = new ExceptionHandlerTree(handler);
+                    exceptionHandlerTree.Parent = oldTop;
+                    oldTop.Trees.Add(exceptionHandlerTree);
+                    stack.Push(exceptionHandlerTree);
+                }
+                tuples.Add((instruction, stack.Peek()));
             }
-            ExceptionHandlerTree answer;
-            if (list.Count == 1)
+
+            for (int i = 0; i < tuples.Count; i++)
             {
-                Debug.Log("Single");
-                answer = list[0];
+                var (it, itTree) = tuples[i];
+                if (it.OpCode != OpCodes.Leave_S && it.OpCode != OpCodes.Leave) continue;
+                var destination = (Instruction)it.Operand;
+                var destinationTree = tuples.First(x => ReferenceEquals(x.Item1, destination)).Item2;
+                var destinationOwnerTree = GetChildOfAWhichIsAncestorOfB(destinationTree, itTree);
+                destinationOwnerTree.AddDestination(destination);
+                itTree.LeaveTupleList.Add((it, destination, destinationOwnerTree));
+                ForceFromTreeUntilToTreeToBeRelay(itTree, destinationOwnerTree);
             }
-            else
-            {
-                Debug.Log("Multiple");
-                answer = new ExceptionHandlerTree(null, list);
-            }
-            Debug.Log(answer.Trees.Count);
-            answer.ConstructDestinations();
             return answer;
         }
 
-        public bool IsInMyTryRange(Instruction instruction) => instruction.IsInRange(Handler.TryStart, Handler.TryEnd);
-
-        private bool TryLocateChild(ExceptionHandlerTree childCandidate)
+        private static void ForceFromTreeUntilToTreeToBeRelay(ExceptionHandlerTree from, ExceptionHandlerTree until)
         {
-            for (var index = 0; index < Trees.Count; index++)
+            while (!ReferenceEquals(from, until))
             {
-                var tree = Trees[index];
-                if (tree.TryLocateChild(childCandidate))
-                {
-                    return true;
-                }
-                if (childCandidate.TryLocateChild(tree))
-                {
-                    Trees[index] = tree;
-                    return true;
-                }
-            }
-            if (!childCandidate.Handler.TryStart.IsInRange(Handler.TryStart, Handler.TryEnd)) return false;
-            childCandidate.Parent = this;
-            Trees.Add(childCandidate);
-            return true;
-        }
-
-        private void ConstructDestinations()
-        {
-            foreach (var tree in Trees)
-            {
-                tree.ConstructDestinations();
-            }
-            if (Handler is null) return;
-            for (Instruction it = Handler.TryStart, end = Handler.TryEnd; !(it is null) && !ReferenceEquals(it, end);)
-            {
-                var duplicate = Trees.FirstOrDefault(x => x.IsInMyTryRange(it));
-                if (duplicate is null)
-                {
-                    if (it.OpCode.Code == Code.Leave_S || it.OpCode.Code == Code.Leave)
-                    {
-                        var leaveDestination = new LeaveDestination((Instruction)it.Operand, this);
-                        if (Parent is null)
-                        {
-                            Array.Resize(ref EndDestinations, EndDestinations.Length + 1);
-                            EndDestinations[EndDestinations.Length - 1] = leaveDestination.Instruction;
-                        }
-                        else
-                        {
-                            Parent.Register(leaveDestination);
-                        }
-                    }
-                    it = it.Next;
-                }
-                else
-                {
-                    it = duplicate.Handler.TryEnd;
-                }
+                from.IsRelay = true;
+                from = from.Parent;
             }
         }
 
-        private void Register(LeaveDestination destination)
+        private static ExceptionHandlerTree GetChildOfAWhichIsAncestorOfB(ExceptionHandlerTree a, ExceptionHandlerTree b)
         {
-            if (IsInMyTryRange(destination.Instruction))
+            var parent = b.Parent;
+            while (!ReferenceEquals(parent, a))
             {
-                destination.ToTree = this;
-                if (!EndDestinations.Contains(destination.Instruction))
-                {
-                    Array.Resize(ref EndDestinations, EndDestinations.Length + 1);
-                    EndDestinations[EndDestinations.Length - 1] = destination.Instruction;
-                }
+                b = parent;
+                parent = b.Parent;
             }
-            else if (Parent is null)
-            {
-                destination.ToTree = null;
-                if (!EndDestinations.Contains(destination.Instruction))
-                {
-                    Array.Resize(ref EndDestinations, EndDestinations.Length + 1);
-                    EndDestinations[EndDestinations.Length - 1] = destination.Instruction;
-                }
-            }
-            else
-            {
-                IsOnlyRelay = true;
-                Parent.Register(destination);
-            }
+            return b;
         }
     }
 }
