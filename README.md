@@ -713,3 +713,11 @@ Environment| Normal Enum (25600000times) | UniEnumExtension Enum (25600000times)
 Editor|31791ms|394ms
 Windows 64bit Mono .net standard 2.0 Release Build|16264ms|46ms
 Windows 64bit IL2CPP .net standard 2.0 Release Build|17011ms|56ms
+
+#Functions
+
+ - foreach statement can be used in the Burst-Compiled Job(s).
+ - Enum.ToString is faster than old one.
+ - Array Enum.GetValues(typeof(NotAbstractEnumType)); is converted as NotAbstractEnumType[] NotAbstractEnumType.GetValues();
+ - bool boxed NotAbstractEnumType instance.HasFlag(Enum boxedValue); is converted as bool NotAbstractEnumType instance.HasFlag(NotAbstractEnumType value);
+  - Two Boxing and the reflection are banished. 
