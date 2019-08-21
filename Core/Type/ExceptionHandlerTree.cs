@@ -77,8 +77,18 @@ namespace UniEnumExtension
             foreach (var tree in answer.Trees)
             {
                 tree.Parent = default;
+                tree.CleanUpDestinations();
             }
             return answer.Trees;
+        }
+
+        private void CleanUpDestinations()
+        {
+            EndDestinations = new HashSet<Instruction>(EndDestinations).ToArray();
+            foreach (var tree in Trees)
+            {
+                tree.CleanUpDestinations();
+            }
         }
 
         private static ExceptionHandlerTree CreateTreeRelationship(Collection<Instruction> instructions, Collection<ExceptionHandler> handlers)

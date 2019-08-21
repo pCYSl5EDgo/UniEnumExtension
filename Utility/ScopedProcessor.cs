@@ -238,7 +238,7 @@ namespace UniEnumExtension
             Optimize();
         }
 
-        private void PreProcessOptimization()
+        public void PreProcessOptimization()
         {
             var bodyInstructions = Processor.Body.Instructions;
             while (true)
@@ -283,12 +283,12 @@ namespace UniEnumExtension
                 }
                 if (notChanged) break;
             }
+            RecalculateOffset();
         }
 
         private void Optimize()
         {
             var instructions = Processor.Body.Instructions;
-            Instruction destinationInstruction;
             bool changed;
             do
             {
@@ -297,6 +297,7 @@ namespace UniEnumExtension
                 for (var i = 0; i < instructions.Count; i++)
                 {
                     instructions[i].Offset = offset;
+                    Instruction destinationInstruction;
                     switch (instructions[i].OpCode.Code)
                     {
                         case Code.Br:

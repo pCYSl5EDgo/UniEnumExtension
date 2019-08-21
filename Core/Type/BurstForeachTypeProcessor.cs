@@ -35,6 +35,7 @@ namespace UniEnumExtension
             using (ScopedProcessor processor = body.GetILProcessor())
             {
                 processor.Simplify();
+                processor.PreProcessOptimization();
                 var exceptionHandlerTrees = ExceptionHandlerTree.Create(body);
                 var totalDepth = exceptionHandlerTrees.Max(x => x.TotalDepth);
                 for (var i = 0; i < totalDepth; i++)
@@ -82,10 +83,54 @@ namespace UniEnumExtension
                 return;
             }
 
-            var methodBody = processor.Processor.Body;
-            var variables = methodBody.Variables;
+            var variableDefinitions = processor.Processor.Body.Variables;
+            if (exceptionHandlerTree.IsRelay)
+            {
+                ProcessRelayHandler(processor, exceptionHandlerTree, variableDefinitions, exceptionHandlerTree.CurrentDepth, iterator);
+            }
+            else
+            {
+                ProcessSingleHandler(processor, exceptionHandlerTree, variableDefinitions, exceptionHandlerTree.CurrentDepth, iterator);
+            }
+        }
 
-            var currentDepth = exceptionHandlerTree.CurrentDepth;
+        private static void ProcessSingleHandler(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree, Collection<VariableDefinition> variables, int currentDepth, Instruction iterator)
+        {
+            switch (exceptionHandlerTree.EndDestinations.Length)
+            {
+                case 1:
+                    {
+                        processor.Replace(iterator, Instruction.Create(OpCodes.Br, exceptionHandlerTree.EndDestinations[0]));
+                    }
+                    break;
+                case 2:
+                    if (ReferenceEquals(exceptionHandlerTree.EndDestinations[0], exceptionHandlerTree.EndDestinations[1]))
+                    {
+                        processor.Replace(iterator, Instruction.Create(OpCodes.Br, exceptionHandlerTree.EndDestinations[0]));
+                    }
+                    else
+                    {
+                        var ld = variables.LoadLocal(variables.Count - 1 - currentDepth);
+                        var brFalse = Instruction.Create(OpCodes.Brfalse, exceptionHandlerTree.EndDestinations[0]);
+                        processor
+                            .Replace(iterator, ld)
+                            .InsertAfter(ld, brFalse)
+                            .InsertAfter(brFalse, Instruction.Create(OpCodes.Br, exceptionHandlerTree.EndDestinations[1]));
+                    }
+                    break;
+                default:
+                    {
+                        var ld = variables.LoadLocal(variables.Count - 1 - currentDepth);
+                        processor
+                            .Replace(iterator, ld)
+                            .InsertAfter(ld, Instruction.Create(OpCodes.Switch, exceptionHandlerTree.EndDestinations));
+                    }
+                    break;
+            }
+        }
+
+        private static void ProcessRelayHandler(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree, Collection<VariableDefinition> variables, int currentDepth, Instruction iterator)
+        {
             var ld = variables.LoadLocal(variables.Count - 1 - currentDepth);
             Instruction @switch;
             if (exceptionHandlerTree.Parent?.Handler is null)
@@ -110,11 +155,56 @@ namespace UniEnumExtension
                     iterator = iterator.Next;
                     continue;
                 }
-                iterator = ProcessLeave(processor, exceptionHandlerTree, iterator, variables, handler);
+                if (exceptionHandlerTree.IsRelay)
+                {
+                    iterator = ProcessRelayTryFinallyScope(processor, exceptionHandlerTree, iterator, variables);
+                }
+                else
+                {
+                    iterator = ProcessSingleTryFinallyScope(processor, exceptionHandlerTree, iterator, variables);
+                }
             }
         }
 
-        private static Instruction ProcessLeave(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree, Instruction iterator, Collection<VariableDefinition> variables, ExceptionHandler handler)
+        private static Instruction ProcessSingleTryFinallyScope(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree, Instruction iterator, Collection<VariableDefinition> variables)
+        {
+            var br = Instruction.Create(OpCodes.Br, exceptionHandlerTree.Handler.HandlerStart);
+            switch (exceptionHandlerTree.EndDestinations.Length)
+            {
+                case 1:
+                    processor.Replace(iterator, br);
+                    break;
+                case 2:
+                    {
+                        var (_, toInstruction, tree) = exceptionHandlerTree.LeaveTupleList.First(x => ReferenceEquals(x.fromInstruction, iterator));
+                        if (ReferenceEquals(tree.EndDestinations[0], tree.EndDestinations[1]))
+                        {
+                            goto case 1;
+                        }
+                        var loadConstantInstruction = InstructionUtility.LoadConstant(Array.IndexOf(tree.EndDestinations, toInstruction));
+                        var storeLocalInstruction = variables.StoreLocal(variables.Count - 1 - tree.CurrentDepth);
+                        processor
+                            .Replace(iterator, loadConstantInstruction)
+                            .InsertAfter(loadConstantInstruction, storeLocalInstruction)
+                            .InsertAfter(storeLocalInstruction, br);
+                    }
+                    break;
+                default:
+                    {
+                        var (_, toInstruction, tree) = exceptionHandlerTree.LeaveTupleList.First(x => ReferenceEquals(x.fromInstruction, iterator));
+                        var loadConstantInstruction = InstructionUtility.LoadConstant(Array.IndexOf(tree.EndDestinations, toInstruction));
+                        var storeLocalInstruction = variables.StoreLocal(variables.Count - 1 - tree.CurrentDepth);
+                        processor
+                            .Replace(iterator, loadConstantInstruction)
+                            .InsertAfter(loadConstantInstruction, storeLocalInstruction)
+                            .InsertAfter(storeLocalInstruction, br);
+                    }
+                    break;
+            }
+            return br;
+        }
+
+        private static Instruction ProcessRelayTryFinallyScope(ScopedProcessor processor, ExceptionHandlerTree exceptionHandlerTree, Instruction iterator, Collection<VariableDefinition> variables)
         {
             var (_, toInstruction, tree) = exceptionHandlerTree.LeaveTupleList.First(x => ReferenceEquals(x.fromInstruction, iterator));
 
@@ -132,7 +222,6 @@ namespace UniEnumExtension
                 var stLoc = variables.StoreLocal(currentIndex);
                 processor.InsertBefore(br, ldc).InsertBefore(br, stLoc);
             }
-
             return br;
         }
     }
