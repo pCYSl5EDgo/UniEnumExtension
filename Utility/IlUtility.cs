@@ -178,7 +178,8 @@ namespace UniEnumExtension
                 case 3:
                     return processor.Add(Instruction.Create(OpCodes.Ldarg_3));
                 default:
-                    return processor.Add(Instruction.Create(index <= sbyte.MaxValue ? OpCodes.Ldarg_S : OpCodes.Ldarg, processor.Body.Method.Parameters[index - 1]));
+                    var methodDefinition = processor.Body.Method;
+                    return processor.Add(Instruction.Create(index <= sbyte.MaxValue ? OpCodes.Ldarg_S : OpCodes.Ldarg, methodDefinition.Parameters[index]));
             }
         }
 

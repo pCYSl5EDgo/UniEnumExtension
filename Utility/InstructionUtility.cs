@@ -6,15 +6,6 @@ namespace UniEnumExtension
 {
     public static class InstructionUtility
     {
-        public static bool IsInRange(this Instruction target, Instruction start, Instruction end)
-        {
-            for (var iterator = start; !(iterator is null) && !ReferenceEquals(iterator, end); iterator = iterator.Next)
-            {
-                if (ReferenceEquals(iterator, target)) return true;
-            }
-            return false;
-        }
-
         public static int GetInt32(this Instruction loadConstantInstruction)
         {
             switch (loadConstantInstruction.OpCode.Code)
