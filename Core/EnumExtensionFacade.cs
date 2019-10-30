@@ -147,12 +147,20 @@ namespace UniEnumExtension
             {
                 try
                 {
-                    var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.ReadWrite);
+                    var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
                     var module = ModuleDefinition.ReadModule(stream, new ReaderParameters
                     {
                         AssemblyResolver = assemblyResolver,
                     });
-                    nameToModuleDefinitionDictionary.Add(module.Assembly.Name.FullName, (module, stream));
+                    try
+                    {
+                        nameToModuleDefinitionDictionary.Add(module.Assembly.Name.FullName, (module, stream));
+                    }
+                    catch (ArgumentException e)
+                    {
+                        Debug.LogError(module.Assembly.Name.FullName);
+                        throw e;
+                    }
                 }
                 catch (FileNotFoundException)
                 {
