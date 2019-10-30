@@ -1,1 +1,0 @@
-{"name":"unienumextension","displayName":"UniEnumExtension","version":"0.0.1","unity":"2018.4","description":"UniEnumExtension let enum be faster.","category":"Library","dependencies":{"nuget.mono-cecil":"0.1.6-preview"}}
