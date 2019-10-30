@@ -8,13 +8,13 @@ namespace UniEnumExtension
 {
     public sealed class Program : EditorWindow
     {
-        [MenuItem("Window/UniEnumExtension")]
+        [MenuItem("Tools/UniEnumExtension/Settings")]
         public static void Open() => GetWindow<Program>();
 
         private SerializedObject serializedObject;
         private SerializedProperty enablesProperty;
         private SerializedProperty shouldProcessAllProperty;
-        ProgramStatus programStatus;
+        private ProgramStatus programStatus;
 
         public void OnEnable()
         {
@@ -44,7 +44,6 @@ namespace UniEnumExtension
             }
         }
 
-        // ReSharper disable once InconsistentNaming
         public void OnGUI()
         {
             var changed = false;

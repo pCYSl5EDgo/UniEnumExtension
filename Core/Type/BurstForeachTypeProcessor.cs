@@ -7,12 +7,11 @@ using UnityEngine;
 
 namespace UniEnumExtension
 {
-    public class BurstForeachTypeProcessor : ITypeProcessor
+    public sealed class BurstForeachTypeProcessor : ITypeProcessor
     {
         public byte Stage => 64;
         public void Process(ModuleDefinition systemModuleDefinition, TypeDefinition typeDefinition)
         {
-            if (typeDefinition.Name != "Job") return;
             if (!typeDefinition.HasCustomAttributes || typeDefinition.HasGenericParameters || typeDefinition.IsGenericInstance || !typeDefinition.IsValueType || typeDefinition.IsEnum || typeDefinition.CustomAttributes.All(x => x.AttributeType.FullName != "Unity.Burst.BurstCompileAttribute"))
             {
                 return;

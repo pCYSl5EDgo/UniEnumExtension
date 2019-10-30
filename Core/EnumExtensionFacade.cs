@@ -27,6 +27,7 @@ namespace UniEnumExtension
                 {
                     new BurstForeachTypeProcessor(),
                     new EnumIsDefinedTypeProcessorString(isLittleEndian),
+                    new EnumGetTypeCodeProcessor(),
                     new EnumIsDefinedTypeProcessorNumberGeneric(),
                     new EnumExtensionProcessorGeneric<byte>(),
                     new EnumExtensionProcessorGeneric<sbyte>(),
@@ -51,6 +52,7 @@ namespace UniEnumExtension
                     new EnumIsDefinedMethodProcessor(),
                     new EnumGetValuesMethodProcessor(),
                     new EnumHasFlagMethodProcessor(),
+                    new EnumGetUnderlyingTypeProcessor(),
                 },
                 searchDirectory)
         {
