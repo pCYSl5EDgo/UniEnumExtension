@@ -1,7 +1,6 @@
 ﻿using System.IO;
 using System.Linq;
 using System.Reflection;
-using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
@@ -36,9 +35,7 @@ namespace UniEnumExtension
 
         private void Implement(BuildReport report)
         {
-            var guidArray = AssetDatabase.FindAssets("t:" + nameof(ProgramStatus));
-            var programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
-            programStatus.Initialize();
+            var programStatus = ProgramStatus.Instance;
             var targetNames = programStatus.Enables.Zip(programStatus.OutputPaths, (enable, outputPath) => (enable, Path.GetFileName(outputPath))).ToArray();
             var assemblyPaths = report.files.Where(buildFile =>
             {

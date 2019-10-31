@@ -12,7 +12,7 @@ namespace UniEnumExtension
         [MenuItem("Tools/UniEnumExtension/Open Managed Plugin Process Window")]
         public static void Open() => GetWindow<ManagedPluginPreprocessor>();
 
-        private static string[] dllArray;
+        private ManagedPluginSettings settings;
 
         [InitializeOnLoadMethod]
         private static void PostCompiled()
@@ -21,43 +21,44 @@ namespace UniEnumExtension
             {
                 return;
             }
-            InitializeDllArray();
-        }
-
-        private sealed class Comparer : IComparer<string>
-        {
-            public int Compare(string x, string y) => string.CompareOrdinal(Path.GetFileNameWithoutExtension(x), Path.GetFileNameWithoutExtension(y));
-        }
-
-        private static void InitializeDllArray()
-        {
-            var guidArray = AssetDatabase.FindAssets("");
-            dllArray = guidArray.Distinct().Select(AssetDatabase.GUIDToAssetPath).Where(path => Path.GetExtension(path) == ".dll").ToArray();
-            Array.Sort(dllArray, new Comparer());
-            foreach (var s in dllArray)
+            var settings = ManagedPluginSettings.Instance;
+            var assemblyPaths = new List<string>();
+            for (var i = 0; i < settings.Tuples.Length; i++)
             {
-                Debug.Log(s);
+                ref var tuple = ref settings.Tuples[i];
+                if(!tuple.ShouldAutoProcess) continue;
+                var fileInfo = new FileInfo(tuple.ManagedPluginPath);
+                if(tuple.ByteSize == fileInfo.Length) continue;
+                tuple.ByteSize = fileInfo.Length;
+                assemblyPaths.Add(tuple.ManagedPluginPath);
             }
+            using (var extender = new EnumExtender(searchDirectory: new[] { Path.GetDirectoryName(UnityEditorInternal.InternalEditorUtility.GetEngineCoreModuleAssemblyPath()) }))
+            {
+                extender.Extend(assemblyPaths);
+            }
+        }
+
+        private void OnEnable()
+        {
+            settings = ManagedPluginSettings.Instance;
         }
 
         public void OnGUI()
         {
-            if (GUILayout.Button("Process All Managed Plugins"))
+            for (var i = 0; i < settings.Tuples.Length; i++)
             {
-                Process(dllArray);
-            }
-            foreach (var dllPath in dllArray)
-            {
-                EditorGUILayout.ToggleLeft(Path.GetFileNameWithoutExtension(dllPath), false, "button");
-            }
-        }
-
-        private void Process(IEnumerable<string> dllPaths)
-        {
-            var searchDirectory = new[] { Path.GetDirectoryName(UnityEditorInternal.InternalEditorUtility.GetEngineCoreModuleAssemblyPath()) };
-            using (var extender = new EnumExtender(searchDirectory: searchDirectory))
-            {
-                extender.Extend(dllPaths);
+                ref var t = ref settings.Tuples[i];
+                ref var shouldProcessAutomatically = ref t.ShouldAutoProcess;
+                var changed = EditorGUILayout.ToggleLeft(
+                    new GUIContent(Path.GetFileNameWithoutExtension(t.ManagedPluginPath), 
+                        (shouldProcessAutomatically ? "Process : " : "Do not process : ")+ t.ManagedPluginPath + "\nSize : " + t.ByteSize
+                    ),
+                    shouldProcessAutomatically,
+                    "button"
+                );
+                if (changed == shouldProcessAutomatically) continue;
+                EditorUtility.SetDirty(settings);
+                shouldProcessAutomatically = changed;
             }
         }
     }

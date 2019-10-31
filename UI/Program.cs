@@ -18,12 +18,7 @@ namespace UniEnumExtension
 
         public void OnEnable()
         {
-            var guidArray = AssetDatabase.FindAssets("t:" + nameof(ProgramStatus));
-            if (programStatus == null)
-            {
-                programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
-            }
-            programStatus.Initialize();
+            programStatus = ProgramStatus.Instance;
             serializedObject = new SerializedObject(programStatus);
             enablesProperty = serializedObject.FindProperty(nameof(ProgramStatus.Enables));
             shouldProcessAllProperty = serializedObject.FindProperty(nameof(programStatus.ShouldProcessAllAssemblies));
@@ -33,10 +28,7 @@ namespace UniEnumExtension
         private static void PostCompiled()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) { return; }
-
-            var guidArray = AssetDatabase.FindAssets("t:" + nameof(ProgramStatus));
-            if (guidArray.Length == 0) return;
-            var programStatus = AssetDatabase.LoadAssetAtPath<ProgramStatus>(AssetDatabase.GUIDToAssetPath(guidArray[0]));
+            var programStatus = ProgramStatus.Instance;
             var assemblyPaths = programStatus.OutputPaths.Where((_, index) => programStatus.Enables[index]);
             using (var extender = new EnumExtender(searchDirectory: new[] { Path.GetDirectoryName(UnityEditorInternal.InternalEditorUtility.GetEngineCoreModuleAssemblyPath()) }))
             {

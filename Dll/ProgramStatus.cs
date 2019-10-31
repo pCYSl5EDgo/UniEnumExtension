@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Linq;
+using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
 
@@ -11,7 +13,45 @@ namespace UniEnumExtension
         [SerializeField] public string[] Names;
         [SerializeField] public string[] OutputPaths;
 
-        public void Initialize()
+        private static ProgramStatus instance;
+
+        public static ProgramStatus Instance
+        {
+            get
+            {
+                if (instance != null) goto RETURN;
+                const string Assets = nameof(Assets);
+                const string Plugins = nameof(Plugins);
+                const string Assets_Plugins = Assets + "/" + Plugins;
+                const string UEE = nameof(UEE);
+                const string Assets_Plugins_UEE = Assets_Plugins + "/" + UEE;
+                const string Dll = nameof(Dll);
+                const string Assets_Plugins_UEE_Dll = Assets_Plugins_UEE + "/" + Dll;
+                const string assetPath = Assets_Plugins_UEE_Dll + "/" + nameof(ProgramStatus) + ".asset";
+                instance = AssetDatabase.LoadAssetAtPath<ProgramStatus>(assetPath);
+                if (instance != null) goto RETURN;
+                if (!AssetDatabase.IsValidFolder(Assets_Plugins_UEE_Dll))
+                {
+                    if (!AssetDatabase.IsValidFolder(Assets_Plugins_UEE))
+                    {
+                        if (!AssetDatabase.IsValidFolder(Assets_Plugins))
+                        {
+                            AssetDatabase.CreateFolder(Assets, Plugins);
+                        }
+                        AssetDatabase.CreateFolder(Assets_Plugins, UEE);
+                    }
+                    AssetDatabase.CreateFolder(Assets_Plugins_UEE, Dll);
+                }
+
+                instance = CreateInstance<ProgramStatus>();
+                AssetDatabase.CreateAsset(instance, assetPath);
+                RETURN:
+                instance.Initialize();
+                return instance;
+            }
+        }
+
+        private void Initialize()
         {
             var playerAssemblies = CompilationPipeline.GetAssemblies(AssembliesType.Player);
             if (ShouldProcessAllAssemblies)
@@ -28,14 +68,11 @@ namespace UniEnumExtension
                     Names[i] = playerAssemblies[i].name;
                     OutputPaths[i] = playerAssemblies[i].outputPath;
                 }
+                Array.Sort(Names, OutputPaths);
             }
             else
             {
-                var dic = new Dictionary<string, (bool, string)>();
-                foreach (var assembly in playerAssemblies)
-                {
-                    dic.Add(assembly.name, (true, assembly.outputPath));
-                }
+                var dic = playerAssemblies.ToDictionary(assembly => assembly.name, assembly => (true, assembly.outputPath));
                 for (var i = 0; i < Enables.Length; i++)
                 {
                     if (dic.TryGetValue(Names[i], out var pair))
