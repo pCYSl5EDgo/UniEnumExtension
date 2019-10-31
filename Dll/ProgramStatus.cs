@@ -12,7 +12,7 @@ namespace UniEnumExtension
         [SerializeField] public bool[] Enables;
         [SerializeField] public string[] Names;
         [SerializeField] public string[] OutputPaths;
-
+        
         private static ProgramStatus instance;
 
         public static ProgramStatus Instance
@@ -51,8 +51,25 @@ namespace UniEnumExtension
             }
         }
 
+        private bool ToQuit()
+        {
+            EditorPrefs.DeleteKey(nameof(UniEnumExtension) + nameof(ProgramStatus) + "IsFirst");
+            return true;
+        }
+
         private void Initialize()
         {
+            if (Enables == null)
+                Enables = Array.Empty<bool>();
+            if (Names == null)
+                Names = Array.Empty<string>();
+            if (OutputPaths == null)
+                OutputPaths = Array.Empty<string>();
+            if (!EditorPrefs.HasKey(nameof(UniEnumExtension) + nameof(ProgramStatus) + "IsFirst"))
+            {
+                EditorApplication.wantsToQuit += ToQuit; 
+                return;
+            }
             var playerAssemblies = CompilationPipeline.GetAssemblies(AssembliesType.Player);
             if (ShouldProcessAllAssemblies)
             {

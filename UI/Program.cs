@@ -15,7 +15,7 @@ namespace UniEnumExtension
         private SerializedProperty enablesProperty;
         private SerializedProperty shouldProcessAllProperty;
         private ProgramStatus programStatus;
-
+        
         public void OnEnable()
         {
             programStatus = ProgramStatus.Instance;
@@ -29,6 +29,11 @@ namespace UniEnumExtension
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) { return; }
             var programStatus = ProgramStatus.Instance;
+            if (!EditorPrefs.HasKey(nameof(UniEnumExtension) + nameof(ProgramStatus) + "IsFirst"))
+            {
+                EditorPrefs.SetBool(nameof(UniEnumExtension) + nameof(ProgramStatus) + "IsFirst", true);
+                return;
+            }
             var assemblyPaths = programStatus.OutputPaths.Where((_, index) => programStatus.Enables[index]);
             using (var extender = new EnumExtender(searchDirectory: new[] { Path.GetDirectoryName(UnityEditorInternal.InternalEditorUtility.GetEngineCoreModuleAssemblyPath()) }))
             {
